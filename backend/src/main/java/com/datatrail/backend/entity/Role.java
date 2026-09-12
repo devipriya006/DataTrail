@@ -18,6 +18,9 @@ public class Role {
     @Column(columnDefinition="TEXT")
     private String description;
 
+    protected Role() {
+    }
+
    public Role(String roleName, String description){
     this.roleName = roleName;
     this.description = description;
