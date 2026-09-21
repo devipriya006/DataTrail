@@ -1,15 +1,13 @@
-POST http://localhost:8080/audit-logs
-Content-Type: application/json
+$login = Invoke-RestMethod `
+  -Method Post `
+  -Uri http://localhost:8080/auth/login `
+  -ContentType 'application/json' `
+  -Body (@{
+    username = '<your-username>'
+    password = '<your-password>'
+  } | ConvertTo-Json)
 
-{
-    "configId": 1,
-    "operation": "UPDATE",
-    "transactionId": "TXN-001",
-    "beforeState": "{\"username\":\"alice\",\"email\":\"old@example.com\"}",
-    "afterState": "{\"username\":\"alice\",\"email\":\"new@example.com\"}",
-    "changedBy": "alice",
-    "eventTimestamp": "2026-09-15T18:30:00",
-    "logHash": "hash-001",
-    "prevHash": null,
-    "chainSequence": 1
-}
+Invoke-RestMethod `
+  -Method Get `
+  -Uri http://localhost:8080/projects `
+  -Headers @{ Authorization = "Bearer $($login.accessToken)" }
