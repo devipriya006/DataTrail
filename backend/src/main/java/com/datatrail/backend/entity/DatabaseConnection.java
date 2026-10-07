@@ -1,5 +1,6 @@
 package com.datatrail.backend.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -31,6 +32,7 @@ public class DatabaseConnection {
     private String username;
 
     @Column(name = "encrypted_password", nullable = false)
+    @JsonIgnore
     private String encryptedPassword;
 
     @Column(name = "ssl_enabled", nullable = false)

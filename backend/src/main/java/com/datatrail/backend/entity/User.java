@@ -1,6 +1,9 @@
 package com.datatrail.backend.entity;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+
 
 @Entity
 @Table(name = "users")
@@ -17,13 +20,14 @@ public class User {
     private String email;
 
     @Column(name = "password_hash", nullable = false)
+    @JsonIgnore
     private String passwordHash;
 
     @ManyToOne
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
 
-    protected User() {
+      protected User() {
     }
 
     public User(String username, String email, String passwordHash, Role role) {

@@ -10,6 +10,7 @@ type LoginResponse = {
   expiresIn: number;
   username: string;
   role: string;
+  userId: number;
 };
 
 function Login() {

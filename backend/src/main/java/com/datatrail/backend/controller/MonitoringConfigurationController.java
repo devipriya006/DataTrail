@@ -1,10 +1,13 @@
 package com.datatrail.backend.controller;
 
-import com.datatrail.backend.entity.MonitoringConfiguration;
+import com.datatrail.backend.dto.MonitoringConfigurationRequest;
+import com.datatrail.backend.dto.MonitoringConfigurationResponse;
 import com.datatrail.backend.service.MonitoringConfigurationService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
-import java.time.LocalDateTime;
+import java.security.Principal;
 import java.util.List;
 import java.util.Map;
 
@@ -22,82 +25,72 @@ public class MonitoringConfigurationController {
     }
 
     @PostMapping
-    public MonitoringConfiguration createConfiguration(
-            @RequestBody Map<String, Object> request) {
-
-        Long connectionId =
-                Long.valueOf(request.get("connectionId").toString());
-
-        String schemaName =
-                (String) request.get("schemaName");
-
-        String tableName =
-                (String) request.get("tableName");
-
-        Boolean monitorInsert =
-                Boolean.valueOf(request.get("monitorInsert").toString());
-
-        Boolean monitorUpdate =
-                Boolean.valueOf(request.get("monitorUpdate").toString());
-
-        Boolean monitorDelete =
-                Boolean.valueOf(request.get("monitorDelete").toString());
-
-        String sensitivityLevel =
-                (String) request.get("sensitivityLevel");
-
-        Boolean monitoringEnabled =
-                Boolean.valueOf(request.get("monitoringEnabled").toString());
-
-        LocalDateTime effectiveFrom =
-                LocalDateTime.parse(request.get("effectiveFrom").toString());
-
-        LocalDateTime effectiveTo = null;
-
-        if (request.get("effectiveTo") != null) {
-            effectiveTo =
-                    LocalDateTime.parse(request.get("effectiveTo").toString());
-        }
-
-        return monitoringConfigurationService.createConfiguration(
-                connectionId,
-                schemaName,
-                tableName,
-                monitorInsert,
-                monitorUpdate,
-                monitorDelete,
-                sensitivityLevel,
-                monitoringEnabled,
-                effectiveFrom,
-                effectiveTo
-        );
+    public MonitoringConfigurationResponse createConfiguration(
+            @RequestBody MonitoringConfigurationRequest request,
+            Principal principal) {
+        return monitoringConfigurationService.createOrUpdateConfiguration(
+                request,
+                principal.getName());
     }
 
     @GetMapping
-    public List<MonitoringConfiguration> getAllConfigurations() {
-        return monitoringConfigurationService.getAllConfigurations();
+    public List<MonitoringConfigurationResponse> getAllConfigurations(Principal principal) {
+        return monitoringConfigurationService.getAllConfigurations(principal.getName());
     }
 
     @GetMapping("/{id}")
-    public MonitoringConfiguration getConfigurationById(
-            @PathVariable Long id) {
-
-        return monitoringConfigurationService.getConfigurationById(id);
+    public MonitoringConfigurationResponse getConfigurationById(
+            @PathVariable Long id,
+                        @RequestParam Long projectId,
+            Principal principal) {
+                return monitoringConfigurationService.getConfigurationById(
+                                id,
+                                projectId,
+                                principal.getName());
     }
 
     @GetMapping("/connection/{connectionId}")
-    public List<MonitoringConfiguration> getConfigurationsByConnection(
-            @PathVariable Long connectionId) {
+    public List<MonitoringConfigurationResponse> getConfigurationsByConnection(
+            @PathVariable Long connectionId,
+                        @RequestParam Long projectId,
+            Principal principal) {
+        return monitoringConfigurationService.getConfigurationsByConnection(
+                connectionId,
+                                projectId,
+                principal.getName());
+    }
 
-        return monitoringConfigurationService
-                .getConfigurationsByConnection(connectionId);
+    @PutMapping("/{id}")
+    public MonitoringConfigurationResponse updateConfiguration(
+            @PathVariable Long id,
+            @RequestBody MonitoringConfigurationRequest request,
+            Principal principal) {
+        return monitoringConfigurationService.updateConfiguration(
+                id,
+                request,
+                principal.getName());
     }
 
     @DeleteMapping("/{id}")
-    public String deleteConfiguration(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteConfiguration(
+            @PathVariable Long id,
+                        @RequestParam Long projectId,
+            Principal principal) {
+                monitoringConfigurationService.deleteConfiguration(
+                                id,
+                                projectId,
+                                principal.getName());
+        return ResponseEntity.noContent().build();
+    }
 
-        monitoringConfigurationService.deleteConfiguration(id);
-
-        return "Monitoring configuration deleted successfully";
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, Object>> handleConnectionError(
+            ResponseStatusException exception) {
+        int status = exception.getStatusCode().value();
+        String message = exception.getReason() == null
+                ? "Monitoring configuration request failed."
+                : exception.getReason();
+        return ResponseEntity.status(status)
+                .body(Map.of("status", status, "message", message));
     }
 }

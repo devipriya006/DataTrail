@@ -7,19 +7,23 @@ public class LoginResponse {
     private long expiresIn;
     private String username;
     private String role;
+    private Long userId;
+
 
     public LoginResponse(
             String accessToken,
             String tokenType,
             long expiresIn,
             String username,
-            String role) {
+            String role,
+            Long userId) {
 
         this.accessToken = accessToken;
         this.tokenType = tokenType;
         this.expiresIn = expiresIn;
         this.username = username;
         this.role = role;
+        this.userId = userId;
     }
 
     public String getAccessToken() {
@@ -40,5 +44,9 @@ public class LoginResponse {
 
     public String getRole() {
         return role;
+    }
+
+     public Long getUserId() {
+        return userId;
     }
 }

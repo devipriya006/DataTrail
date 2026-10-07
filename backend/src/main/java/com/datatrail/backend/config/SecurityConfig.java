@@ -24,7 +24,8 @@ public CorsConfigurationSource corsConfigurationSource() {
 
     configuration.setAllowedOrigins(
             java.util.List.of(
-                    "http://localhost:5173"
+                    "http://localhost:5173",
+                    "http://localhost:5174"
             )
     );
 

@@ -113,12 +113,13 @@ public class AuthService {
                 )
         ).getTokenValue();
 
-        return new LoginResponse(
-                token,
-                "Bearer",
-                900,
-                user.getUsername(),
-                user.getRole().getRoleName()
-        );
+       return new LoginResponse(
+        token,
+        "Bearer",
+        900,
+        user.getUsername(),
+        user.getRole().getRoleName(),
+        user.getUserId()
+);
     }
 }

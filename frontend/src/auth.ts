@@ -4,6 +4,7 @@ export type UserSession = {
   expiresIn: number;
   username: string;
   role: string;
+  userId: number;
 };
 
 const SESSION_KEY = "tracedb_session";

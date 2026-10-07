@@ -1,13 +1,58 @@
-$login = Invoke-RestMethod `
-  -Method Post `
-  -Uri http://localhost:8080/auth/login `
-  -ContentType 'application/json' `
-  -Body (@{
-    username = '<your-username>'
-    password = '<your-password>'
-  } | ConvertTo-Json)
+@token = YOUR_FRESH_JWT
+@projectId = 1
+@connectionId = 1
+@configId = 1
 
-Invoke-RestMethod `
-  -Method Get `
-  -Uri http://localhost:8080/projects `
-  -Headers @{ Authorization = "Bearer $($login.accessToken)" }
+### Test saved PostgreSQL connection
+POST http://localhost:8080/database-connections/{{connectionId}}/test
+Authorization: Bearer {{token}}
+
+### Discover target database schemas
+GET http://localhost:8080/database-connections/{{connectionId}}/schemas?projectId={{projectId}}
+Authorization: Bearer {{token}}
+
+### Discover base tables in a schema
+GET http://localhost:8080/database-connections/{{connectionId}}/tables?schema=public&projectId={{projectId}}
+Authorization: Bearer {{token}}
+
+### Save or update monitoring configuration for one table
+POST http://localhost:8080/monitoring-configurations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "projectId": {{projectId}},
+  "connectionId": {{connectionId}},
+  "schemaName": "public",
+  "tableName": "users",
+  "monitorInsert": true,
+  "monitorUpdate": true,
+  "monitorDelete": true,
+  "sensitivityLevel": "NORMAL",
+  "monitoringEnabled": true
+}
+
+### List monitoring configurations for a connection
+GET http://localhost:8080/monitoring-configurations/connection/{{connectionId}}?projectId={{projectId}}
+Authorization: Bearer {{token}}
+
+### Update a monitoring configuration
+PUT http://localhost:8080/monitoring-configurations/{{configId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "projectId": {{projectId}},
+  "connectionId": {{connectionId}},
+  "schemaName": "public",
+  "tableName": "users",
+  "monitorInsert": true,
+  "monitorUpdate": true,
+  "monitorDelete": true,
+  "sensitivityLevel": "NORMAL",
+  "monitoringEnabled": false
+}
+
+### Delete a monitoring configuration
+DELETE http://localhost:8080/monitoring-configurations/{{configId}}?projectId={{projectId}}
+Authorization: Bearer {{token}}

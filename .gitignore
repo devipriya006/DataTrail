@@ -1,1 +1,15 @@
+# Environment / secrets
 .env
+*.env
+
+# JWT keys
+jwt-keys/
+
+# Build files
+target/
+node_modules/
+dist/
+
+# IDE
+.vscode/
+.idea/

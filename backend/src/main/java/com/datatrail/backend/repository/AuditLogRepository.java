@@ -8,4 +8,6 @@ import java.util.List;
 public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
 
     List<AuditLog> findByConfigurationConfigId(Long configId);
+
+    long countByConfigurationConfigId(Long configId);
 }
