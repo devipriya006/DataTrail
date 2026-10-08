@@ -9,5 +9,11 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
 
     List<AuditLog> findByConfigurationConfigId(Long configId);
 
+    List<AuditLog> findByConfigurationConnectionConnectionId(Long connectionId);
+
+    List<AuditLog> findByConfigurationConnectionProjectProjectId(Long projectId);
+
+    List<AuditLog> findByConfigurationConnectionProjectOwnerUsername(String ownerUsername);
+
     long countByConfigurationConfigId(Long configId);
 }
