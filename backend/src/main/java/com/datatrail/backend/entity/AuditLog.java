@@ -42,33 +42,68 @@ public class AuditLog {
     @Column(name = "chain_sequence", nullable = false)
     private Long chainSequence;
 
+    @Column(name = "database_user", length = 100)
+    private String databaseUser;
+
+    @Column(name = "actor_source", length = 30)
+    private String actorSource;
+
     protected AuditLog() {
     }
 
     public AuditLog(
-            MonitoringConfiguration configuration,
-            String operation,
-            String transactionId,
-            String beforeState,
-            String afterState,
-            String changedBy,
-            LocalDateTime eventTimestamp,
-            String logHash,
-            String prevHash,
-            Long chainSequence) {
+        MonitoringConfiguration configuration,
+        String operation,
+        String transactionId,
+        String beforeState,
+        String afterState,
+        String changedBy,
+        String databaseUser,
+        String actorSource,
+        LocalDateTime eventTimestamp,
+        String logHash,
+        String prevHash,
+        Long chainSequence) {
+    this.configuration = configuration;
+    this.operation = operation;
+    this.transactionId = transactionId;
+    this.beforeState = beforeState;
+    this.afterState = afterState;
+    this.changedBy = changedBy;
+    this.databaseUser = databaseUser;
+    this.actorSource = actorSource;
+    this.eventTimestamp = eventTimestamp;
+    this.logHash = logHash;
+    this.prevHash = prevHash;
+    this.chainSequence = chainSequence;
+}
+public AuditLog(
+        MonitoringConfiguration configuration,
+        String operation,
+        String transactionId,
+        String beforeState,
+        String afterState,
+        String changedBy,
+        LocalDateTime eventTimestamp,
+        String logHash,
+        String prevHash,
+        Long chainSequence) {
 
-        this.configuration = configuration;
-        this.operation = operation;
-        this.transactionId = transactionId;
-        this.beforeState = beforeState;
-        this.afterState = afterState;
-        this.changedBy = changedBy;
-        this.eventTimestamp = eventTimestamp;
-        this.logHash = logHash;
-        this.prevHash = prevHash;
-        this.chainSequence = chainSequence;
-    }
-
+    this(
+            configuration,
+            operation,
+            transactionId,
+            beforeState,
+            afterState,
+            changedBy,
+            null,
+            null,
+            eventTimestamp,
+            logHash,
+            prevHash,
+            chainSequence
+    );
+}
     public Long getAuditId() {
         return auditId;
     }
@@ -156,4 +191,21 @@ public class AuditLog {
     public void setChainSequence(Long chainSequence) {
         this.chainSequence = chainSequence;
     }
+
+    public String getDatabaseUser() {
+    return databaseUser;
+}
+
+public void setDatabaseUser(String databaseUser) {
+    this.databaseUser = databaseUser;
+}
+
+public String getActorSource() {
+    return actorSource;
+}
+
+public void setActorSource(String actorSource) {
+    this.actorSource = actorSource;
+}
+
 }

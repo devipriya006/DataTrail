@@ -13,6 +13,7 @@ import ProjectDetails from "./pages/ProjectDetails";
 import { isAuthenticated } from "./auth";
 import DatabaseConnections from "./pages/DatabaseConnections";
 import Monitoring from "./pages/Monitoring";
+import AuditLogs from "./pages/AuditLogs";
 
 function ProtectedRoute({
   children,
@@ -87,6 +88,24 @@ function App() {
           element={
             <ProtectedRoute>
               <Monitoring />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/projects/:projectId/audit-logs"
+          element={
+            <ProtectedRoute>
+              <AuditLogs />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/audit-logs"
+          element={
+            <ProtectedRoute>
+              <AuditLogs />
             </ProtectedRoute>
           }
         />

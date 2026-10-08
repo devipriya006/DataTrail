@@ -12,6 +12,8 @@ public record AuditLogResponse(
         String beforeState,
         String afterState,
         String changedBy,
+        String databaseUser,
+        String actorSource,
         LocalDateTime eventTimestamp,
         String logHash,
         String prevHash,

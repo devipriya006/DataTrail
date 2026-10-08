@@ -36,6 +36,7 @@ function ProjectDetails() {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
   const [connections, setConnections] = useState<DatabaseConnection[]>([]);
   const [loadingConnections, setLoadingConnections] = useState(true);
   const [connectionsError, setConnectionsError] = useState("");
@@ -72,6 +73,7 @@ function ProjectDetails() {
             navigate("/login", { replace: true });
             return;
           }
+
           throw new Error("Project not found.");
         }
 
@@ -115,6 +117,7 @@ function ProjectDetails() {
             navigate("/login", { replace: true });
             return;
           }
+
           throw new Error("Failed to load database connections.");
         }
 
@@ -139,7 +142,6 @@ function ProjectDetails() {
     return (
       <main className="dashboard-page">
         <aside className="dashboard-sidebar">
-
           <div className="dashboard-logo">
             <span className="logo-mark">T</span>
             <span className="logo-text">TraceDB</span>
@@ -155,11 +157,39 @@ function ProjectDetails() {
             </div>
 
             <div
-              className="nav-item active"
+              className="nav-item"
               onClick={() => navigate("/projects")}
             >
               <span>▣</span>
               Projects
+            </div>
+
+            <div
+              className="nav-item active"
+              onClick={() => navigate(`/projects/${projectId}`)}
+            >
+              <span>⌂</span>
+              Overview
+            </div>
+
+            <div
+              className="nav-item"
+              onClick={() =>
+                navigate(`/projects/${projectId}/connections`)
+              }
+            >
+              <span>◉</span>
+              Database
+            </div>
+
+            <div
+              className="nav-item"
+              onClick={() =>
+                navigate(`/projects/${projectId}/audit-logs`)
+              }
+            >
+              <span>⌁</span>
+              Audit Logs
             </div>
           </nav>
         </aside>
@@ -178,7 +208,9 @@ function ProjectDetails() {
           <section className="dashboard-welcome">
             <div>
               <p className="section-label">LOADING PROJECT</p>
+
               <h2>Loading workspace...</h2>
+
               <p>
                 Retrieving project information from TraceDB.
               </p>
@@ -191,18 +223,14 @@ function ProjectDetails() {
 
   return (
     <main className="dashboard-page">
-
       {/* SIDEBAR */}
-
       <aside className="dashboard-sidebar">
-
         <div className="dashboard-logo">
           <span className="logo-mark">T</span>
           <span className="logo-text">TraceDB</span>
         </div>
 
         <nav className="dashboard-nav">
-
           <div
             className="nav-item"
             onClick={() => navigate("/dashboard")}
@@ -212,64 +240,56 @@ function ProjectDetails() {
           </div>
 
           <div
-            className="nav-item active"
+            className="nav-item"
             onClick={() => navigate("/projects")}
           >
             <span>▣</span>
             Projects
           </div>
 
-          <div className="nav-item">
+          <div
+            className="nav-item active"
+            onClick={() => navigate(`/projects/${projectId}`)}
+          >
+            <span>⌂</span>
+            Overview
+          </div>
+
+          <div
+            className="nav-item"
+            onClick={() =>
+              navigate(`/projects/${projectId}/connections`)
+            }
+          >
             <span>◉</span>
-            Connections
+            Database
           </div>
 
-          <div className="nav-item">
-            <span>◈</span>
-            Monitoring
-          </div>
-
-          <div className="nav-item">
+          <div
+            className="nav-item"
+            onClick={() =>
+              navigate(`/projects/${projectId}/audit-logs`)
+            }
+          >
             <span>⌁</span>
-            Audit Timeline
+            Audit Logs
           </div>
-
-          <div className="nav-item">
-            <span>◇</span>
-            Provenance
-          </div>
-
-          <div className="nav-item">
-            <span>↶</span>
-            Recovery
-          </div>
-
         </nav>
-
       </aside>
 
       {/* MAIN */}
-
       <section className="dashboard-content">
-
         {/* HEADER */}
-
         <header className="dashboard-header">
-
           <div>
-
             <p className="dashboard-eyebrow">
               PROVENANCE INTELLIGENCE ENGINE
             </p>
 
-            <h1>
-              Project Workspace
-            </h1>
-
+            <h1>Project Workspace</h1>
           </div>
 
           <div className="dashboard-user">
-
             <div>
               <strong>{username}</strong>
               <small>{role}</small>
@@ -278,31 +298,18 @@ function ProjectDetails() {
             <div className="user-avatar">
               {username.charAt(0).toUpperCase()}
             </div>
-
           </div>
-
         </header>
 
         {/* ERROR */}
-
         {error ? (
-
           <section className="dashboard-welcome">
-
             <div>
+              <p className="section-label">PROJECT ERROR</p>
 
-              <p className="section-label">
-                PROJECT ERROR
-              </p>
+              <h2>Unable to load project.</h2>
 
-              <h2>
-                Unable to load project.
-              </h2>
-
-              <p>
-                {error}
-              </p>
-
+              <p>{error}</p>
             </div>
 
             <button
@@ -311,32 +318,20 @@ function ProjectDetails() {
             >
               ← Back to Projects
             </button>
-
           </section>
-
         ) : project ? (
-
           <>
-
             {/* PROJECT HEADER */}
-
             <section className="dashboard-welcome">
-
               <div>
+                <p className="section-label">PROJECT WORKSPACE</p>
 
-                <p className="section-label">
-                  PROJECT WORKSPACE
-                </p>
-
-                <h2>
-                  {project.projectName}
-                </h2>
+                <h2>{project.projectName}</h2>
 
                 <p>
                   {project.description ||
                     "No project description provided."}
                 </p>
-
               </div>
 
               <button
@@ -345,71 +340,58 @@ function ProjectDetails() {
               >
                 ← Projects
               </button>
-
             </section>
 
             {/* PROJECT STATS */}
-
             <section className="dashboard-stats">
-
               <div className="stat-card">
                 <span>PROJECT ID</span>
-                <strong>
-                  #{project.projectId}
-                </strong>
-                <small>
-                  TraceDB project
-                </small>
+
+                <strong>#{project.projectId}</strong>
+
+                <small>TraceDB project</small>
               </div>
 
               <div className="stat-card">
                 <span>OWNER</span>
+
                 <strong>
                   {project.owner?.username || username}
                 </strong>
-                <small>
-                  Project owner
-                </small>
+
+                <small>Project owner</small>
               </div>
 
               <div className="stat-card">
                 <span>DATABASE CONNECTIONS</span>
+
                 <strong>{connections.length}</strong>
+
                 <small>
-                  {connections.length === 1 ? "Saved connection" : "Saved connections"}
+                  {connections.length === 1
+                    ? "Saved connection"
+                    : "Saved connections"}
                 </small>
               </div>
 
               <div className="stat-card">
-                <span>AUDIT EVENTS</span>
-                <strong>0</strong>
-                <small>
-                  No events captured
-                </small>
-              </div>
+                <span>AUDIT LOGS</span>
 
+                <strong>VIEW</strong>
+
+                <small>Inspect database changes</small>
+              </div>
             </section>
 
-            {/* WORKSPACE */}
-
+            {/* DATABASE + STATUS */}
             <section className="dashboard-grid">
-
               {/* DATABASE CONNECTION */}
-
               <div className="dashboard-panel">
-
                 <div className="panel-header">
-
                   <div>
+                    <p className="section-label">DATABASE</p>
 
-                    <p className="section-label">
-                      DATABASE
-                    </p>
-
-                    <h3>
-                      Database Connections
-                    </h3>
-
+                    <h3>Database Connection</h3>
                   </div>
 
                   <button
@@ -420,277 +402,199 @@ function ProjectDetails() {
                       )
                     }
                   >
-                    Manage →
+                    Open →
                   </button>
-
                 </div>
 
                 {loadingConnections ? (
                   <div className="activity-item">
-                    <div className="activity-details"><strong>Loading database connections...</strong></div>
+                    <div className="activity-details">
+                      <strong>
+                        Loading database connection...
+                      </strong>
+                    </div>
                   </div>
                 ) : connectionsError ? (
-                  <div className="activity-item" role="alert">
+                  <div
+                    className="activity-item"
+                    role="alert"
+                  >
                     <div className="activity-details">
-                      <strong>Unable to load database connections.</strong>
+                      <strong>
+                        Unable to load database connection.
+                      </strong>
+
                       <p>{connectionsError}</p>
                     </div>
                   </div>
                 ) : connections.length === 0 ? (
                   <div className="activity-item">
-                    <div className="activity-marker">SETUP</div>
-                    <div className="activity-details">
-                      <strong>No database connected</strong>
-                      <p>Connect an external database to discover tables and begin monitoring.</p>
+                    <div className="activity-marker">
+                      SETUP
                     </div>
+
+                    <div className="activity-details">
+                      <strong>
+                        No database connected
+                      </strong>
+
+                      <p>
+                        Connect a database to discover tables
+                        and configure monitoring.
+                      </p>
+                    </div>
+
                     <button
                       className="panel-link"
-                      onClick={() => navigate(`/projects/${project.projectId}/connections`)}
+                      onClick={() =>
+                        navigate(
+                          `/projects/${project.projectId}/connections`
+                        )
+                      }
                     >
                       Add →
                     </button>
                   </div>
                 ) : (
                   connections.map((connection) => (
-                    <div className="activity-item" key={connection.connectionId}>
-                      <div className="activity-marker">DB</div>
-                      <div className="activity-details">
-                        <strong>{connection.databaseName}</strong>
-                        <p>{connection.dbType} · {connection.host}:{connection.port}</p>
-                        <small>{connection.connectionStatus}</small>
+                    <div
+                      className="activity-item"
+                      key={connection.connectionId}
+                    >
+                      <div className="activity-marker">
+                        DB
                       </div>
+
+                      <div className="activity-details">
+                        <strong>
+                          {connection.databaseName}
+                        </strong>
+
+                        <p>
+                          {connection.dbType} ·{" "}
+                          {connection.host}:{connection.port}
+                        </p>
+
+                        <small>
+                          {connection.connectionStatus}
+                        </small>
+                      </div>
+
                       <button
                         className="panel-link"
-                        onClick={() => navigate(`/projects/${project.projectId}/connections`)}
+                        onClick={() =>
+                          navigate(
+                            `/projects/${project.projectId}/connections`
+                          )
+                        }
                       >
                         Manage →
                       </button>
                     </div>
                   ))
                 )}
-
               </div>
 
               {/* PROJECT STATUS */}
-
               <div className="dashboard-panel">
-
                 <div className="panel-header">
-
                   <div>
-
                     <p className="section-label">
                       PROJECT STATUS
                     </p>
 
-                    <h3>
-                      Provenance readiness
-                    </h3>
-
+                    <h3>Provenance readiness</h3>
                   </div>
-
                 </div>
 
                 <div className="health-row">
                   <span>Database Connection</span>
-                  <strong>NOT SET</strong>
+
+                  <strong>
+                    {connections.length > 0
+                      ? "READY"
+                      : "NOT SET"}
+                  </strong>
                 </div>
 
                 <div className="health-row">
                   <span>Table Monitoring</span>
-                  <strong>WAITING</strong>
+
+                  <strong>
+                    {connections.length > 0
+                      ? "CONFIGURABLE"
+                      : "WAITING"}
+                  </strong>
                 </div>
 
                 <div className="health-row">
                   <span>Audit Collection</span>
+
                   <strong>READY</strong>
                 </div>
 
                 <div className="health-row">
                   <span>Provenance Engine</span>
-                  <strong>READY</strong>
+
+                  <strong>PLANNED</strong>
                 </div>
-
               </div>
-
             </section>
 
-            {/* WORKSPACE MODULES */}
-
+            {/* AUDIT LOGS */}
             <section className="dashboard-panel">
-
               <div className="panel-header">
-
                 <div>
+                  <p className="section-label">AUDIT</p>
 
-                  <p className="section-label">
-                    TRACE YOUR DATA
-                  </p>
-
-                  <h3>
-                    Project Modules
-                  </h3>
-
-                </div>
-
-              </div>
-
-              <div className="activity-item">
-
-                <div className="activity-marker">
-                  01
-                </div>
-
-                <div className="activity-details">
-
-                  <strong>
-                    Database Connections
-                  </strong>
-
-                  <p>
-                    Connect PostgreSQL or another supported
-                    database to this TraceDB project.
-                  </p>
-
+                  <h3>Audit Logs</h3>
                 </div>
 
                 <button
                   className="panel-link"
                   onClick={() =>
                     navigate(
-                      `/projects/${project.projectId}/connections`
+                      `/projects/${project.projectId}/audit-logs`
                     )
                   }
                 >
                   Open →
                 </button>
-
               </div>
 
               <div className="activity-item">
-
                 <div className="activity-marker">
-                  02
+                  LOG
                 </div>
 
                 <div className="activity-details">
-
                   <strong>
-                    Monitoring
+                    Database Change History
                   </strong>
 
                   <p>
-                    Select schemas and tables and configure
-                    INSERT, UPDATE and DELETE tracking.
-                  </p>
-
-                </div>
-
-                <span className="activity-time">
-                  NEXT
-                </span>
-
-              </div>
-
-              <div className="activity-item">
-
-                <div className="activity-marker">
-                  03
-                </div>
-
-                <div className="activity-details">
-
-                  <strong>
-                    Audit Timeline
-                  </strong>
-
-                  <p>
-                    Investigate database changes with
+                    Investigate real database changes with
                     chronological before and after states.
                   </p>
-
                 </div>
-
-                <span className="activity-time">
-                  READY
-                </span>
-
               </div>
-
-              <div className="activity-item">
-
-                <div className="activity-marker">
-                  04
-                </div>
-
-                <div className="activity-details">
-
-                  <strong>
-                    Provenance
-                  </strong>
-
-                  <p>
-                    Explore relationships and dependencies
-                    between database events.
-                  </p>
-
-                </div>
-
-                <span className="activity-time">
-                  READY
-                </span>
-
-              </div>
-
-              <div className="activity-item">
-
-                <div className="activity-marker">
-                  05
-                </div>
-
-                <div className="activity-details">
-
-                  <strong>
-                    Recovery
-                  </strong>
-
-                  <p>
-                    Plan controlled recovery actions while
-                    preserving the complete history.
-                  </p>
-
-                </div>
-
-                <span className="activity-time">
-                  READY
-                </span>
-
-              </div>
-
             </section>
 
             {/* PROJECT INFORMATION */}
-
             <section className="dashboard-panel">
-
               <div className="panel-header">
-
                 <div>
-
                   <p className="section-label">
                     PROJECT INFORMATION
                   </p>
 
-                  <h3>
-                    Details
-                  </h3>
-
+                  <h3>Details</h3>
                 </div>
-
               </div>
 
               <div className="health-row">
                 <span>Project name</span>
+
                 <strong>
                   {project.projectName}
                 </strong>
@@ -698,6 +602,7 @@ function ProjectDetails() {
 
               <div className="health-row">
                 <span>Project ID</span>
+
                 <strong>
                   #{project.projectId}
                 </strong>
@@ -705,6 +610,7 @@ function ProjectDetails() {
 
               <div className="health-row">
                 <span>Owner</span>
+
                 <strong>
                   {project.owner?.username || username}
                 </strong>
@@ -712,6 +618,7 @@ function ProjectDetails() {
 
               <div className="health-row">
                 <span>Created</span>
+
                 <strong>
                   {new Date(
                     project.createdAt
@@ -722,33 +629,19 @@ function ProjectDetails() {
                   })}
                 </strong>
               </div>
-
             </section>
-
           </>
-
         ) : null}
 
         {/* FOOTER */}
-
         <footer className="dashboard-footer">
+          <span>TraceDB</span>
 
-          <span>
-            TraceDB
-          </span>
+          <span>Database Provenance Platform</span>
 
-          <span>
-            Database Provenance Platform
-          </span>
-
-          <span>
-            © 2026
-          </span>
-
+          <span>© 2026</span>
         </footer>
-
       </section>
-
     </main>
   );
 }

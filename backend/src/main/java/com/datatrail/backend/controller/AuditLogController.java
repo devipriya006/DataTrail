@@ -1,7 +1,6 @@
 package com.datatrail.backend.controller;
 
 import com.datatrail.backend.dto.AuditLogResponse;
-import com.datatrail.backend.entity.AuditLog;
 import com.datatrail.backend.service.AuditLogService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -23,51 +22,31 @@ public class AuditLogController {
         this.auditLogService = auditLogService;
     }
 
-    @PostMapping
-    public AuditLog createAuditLog(
-            @RequestBody Map<String, Object> request,
-            Principal principal) {
-
-        if (principal == null) {
-            throw new ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED,
-                    "Authentication is required.");
-        }
-
-        Long configId = Long.valueOf(request.get("configId").toString());
-        String operation = (String) request.get("operation");
-        String transactionId = (String) request.get("transactionId");
-        String beforeState = (String) request.get("beforeState");
-        String afterState = (String) request.get("afterState");
-        String changedBy = (String) request.get("changedBy");
-        LocalDateTime eventTimestamp = LocalDateTime.parse(request.get("eventTimestamp").toString());
-        String logHash = (String) request.get("logHash");
-        String prevHash = (String) request.get("prevHash");
-        Long chainSequence = Long.valueOf(request.get("chainSequence").toString());
-
-        return auditLogService.createAuditLog(
-                configId,
-                operation,
-                transactionId,
-                beforeState,
-                afterState,
-                changedBy,
-                eventTimestamp,
-                logHash,
-                prevHash,
-                chainSequence
-        );
-    }
+    /*
+     * Audit events are created by the PostgreSQL change-capture trigger.
+     *
+     * We intentionally do NOT expose a POST endpoint for creating
+     * audit logs manually. Otherwise a client could fabricate history.
+     */
 
     @GetMapping
-    public List<AuditLogResponse> getAllAuditLogs(Principal principal) {
-        return auditLogService.getAllAuditLogsForOwner(principal.getName());
+    public List<AuditLogResponse> getAllAuditLogs(
+            Principal principal) {
+
+        return auditLogService.getAllAuditLogsForOwner(
+                principal.getName()
+        );
     }
 
     @GetMapping("/{id}")
     public AuditLogResponse getAuditLogById(
             @PathVariable Long id,
             Principal principal) {
-        return auditLogService.getAuditLogById(id, principal.getName());
+
+        return auditLogService.getAuditLogById(
+                id,
+                principal.getName()
+        );
     }
 
     @GetMapping("/project/{projectId}")
@@ -77,9 +56,11 @@ public class AuditLogController {
             @RequestParam(required = false) String table,
             @RequestParam(required = false) String changedBy,
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFrom,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime dateFrom,
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateTo,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime dateTo,
             Principal principal) {
 
         return auditLogService.getAuditLogsByProject(
@@ -101,9 +82,11 @@ public class AuditLogController {
             @RequestParam(required = false) String table,
             @RequestParam(required = false) String changedBy,
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFrom,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime dateFrom,
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateTo,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime dateTo,
             Principal principal) {
 
         return auditLogService.getAuditLogsByConnection(
@@ -126,9 +109,11 @@ public class AuditLogController {
             @RequestParam(required = false) String table,
             @RequestParam(required = false) String changedBy,
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFrom,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime dateFrom,
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateTo,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime dateTo,
             Principal principal) {
 
         return auditLogService.getAuditLogsByConfiguration(
@@ -148,27 +133,33 @@ public class AuditLogController {
             @PathVariable Long configId,
             @RequestParam Long projectId,
             Principal principal) {
-        return auditLogService.verifyHashChain(configId, projectId, principal.getName());
-    }
 
-    @DeleteMapping("/{id}")
-    public String deleteAuditLog(
-            @PathVariable Long id,
-            Principal principal) {
-
-        auditLogService.deleteAuditLog(id, principal.getName());
-        return "Audit log deleted successfully";
+        return auditLogService.verifyHashChain(
+                configId,
+                projectId,
+                principal.getName()
+        );
     }
 
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, Object>> handleAuditError(
             ResponseStatusException exception) {
+
         int status = exception.getStatusCode().value();
+
         String message = exception.getReason() != null
                 ? exception.getReason()
                 : "Audit log request failed.";
 
-        return ResponseEntity.status(status)
-                .body(Map.of("status", status, "message", message));
+        return ResponseEntity
+                .status(status)
+                .body(
+                        Map.of(
+                                "status",
+                                status,
+                                "message",
+                                message
+                        )
+                );
     }
 }
