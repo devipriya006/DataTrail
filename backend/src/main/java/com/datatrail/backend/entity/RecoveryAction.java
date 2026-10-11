@@ -11,9 +11,13 @@ public class RecoveryAction {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long recoveryId;
 
-    @ManyToOne
-    @JoinColumn(name = "analysis_id", nullable = false)
+   @ManyToOne
+    @JoinColumn(name = "analysis_id", nullable = true)
     private ChangeAnalysis analysis;
+
+    @ManyToOne
+    @JoinColumn(name = "audit_id")
+    private AuditLog auditLog;
 
     @Column(name = "recommended_sql", columnDefinition = "TEXT")
     private String recommendedSql;
@@ -34,7 +38,40 @@ public class RecoveryAction {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @ManyToOne
+    @JoinColumn(name = "override_by")
+    private User overrideBy;
+
+    @Column(name = "override_reason", columnDefinition = "TEXT")
+    private String overrideReason;
+
+    @Column(name = "override_at")
+    private LocalDateTime overrideAt;
+
+    @Column(name = "override_decision", length = 30)
+    private String overrideDecision;
+
     protected RecoveryAction() {
+    }
+
+    public RecoveryAction(
+            ChangeAnalysis analysis,
+            AuditLog auditLog,
+            String recommendedSql,
+            String recoveryType,
+            String approvalStatus,
+            User approvedBy,
+            LocalDateTime approvedAt,
+            LocalDateTime createdAt) {
+
+        this.analysis = analysis;
+        this.auditLog = auditLog;
+        this.recommendedSql = recommendedSql;
+        this.recoveryType = recoveryType;
+        this.approvalStatus = approvalStatus;
+        this.approvedBy = approvedBy;
+        this.approvedAt = approvedAt;
+        this.createdAt = createdAt;
     }
 
     public RecoveryAction(
@@ -45,14 +82,7 @@ public class RecoveryAction {
             User approvedBy,
             LocalDateTime approvedAt,
             LocalDateTime createdAt) {
-
-        this.analysis = analysis;
-        this.recommendedSql = recommendedSql;
-        this.recoveryType = recoveryType;
-        this.approvalStatus = approvalStatus;
-        this.approvedBy = approvedBy;
-        this.approvedAt = approvedAt;
-        this.createdAt = createdAt;
+        this(analysis, null, recommendedSql, recoveryType, approvalStatus, approvedBy, approvedAt, createdAt);
     }
 
     public Long getRecoveryId() {
@@ -69,6 +99,14 @@ public class RecoveryAction {
 
     public void setAnalysis(ChangeAnalysis analysis) {
         this.analysis = analysis;
+    }
+
+    public AuditLog getAuditLog() {
+        return auditLog;
+    }
+
+    public void setAuditLog(AuditLog auditLog) {
+        this.auditLog = auditLog;
     }
 
     public String getRecommendedSql() {
@@ -117,5 +155,37 @@ public class RecoveryAction {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public User getOverrideBy() {
+        return overrideBy;
+    }
+
+    public void setOverrideBy(User overrideBy) {
+        this.overrideBy = overrideBy;
+    }
+
+    public String getOverrideReason() {
+        return overrideReason;
+    }
+
+    public void setOverrideReason(String overrideReason) {
+        this.overrideReason = overrideReason;
+    }
+
+    public LocalDateTime getOverrideAt() {
+        return overrideAt;
+    }
+
+    public void setOverrideAt(LocalDateTime overrideAt) {
+        this.overrideAt = overrideAt;
+    }
+
+    public String getOverrideDecision() {
+        return overrideDecision;
+    }
+
+    public void setOverrideDecision(String overrideDecision) {
+        this.overrideDecision = overrideDecision;
     }
 }

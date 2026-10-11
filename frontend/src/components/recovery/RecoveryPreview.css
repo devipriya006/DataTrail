@@ -1,0 +1,298 @@
+.audit-recovery-action {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 18px;
+  border-top: 1px solid #1b2d32;
+}
+
+.recovery-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 24px;
+  background: rgba(2, 9, 12, 0.82);
+}
+
+.recovery-dialog {
+  width: min(760px, 100%);
+  max-height: min(88vh, 900px);
+  overflow-y: auto;
+  border: 1px solid #294147;
+  background: #0b171c;
+  color: #e7eff0;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+}
+
+.recovery-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px 28px 20px;
+  border-bottom: 1px solid #1b2d32;
+}
+
+.recovery-dialog-header .section-label {
+  margin-bottom: 8px;
+}
+
+.recovery-dialog-header h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 550;
+}
+
+.recovery-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #294147;
+  background: transparent;
+  color: #9bb0b3;
+  font-size: 21px;
+}
+
+.recovery-close:hover {
+  border-color: #5df1c9;
+  color: #5df1c9;
+}
+
+.recovery-progress {
+  margin: 0;
+  padding: 22px 28px;
+  color: #5df1c9;
+  font-size: 13px;
+}
+
+.recovery-details,
+.recovery-blocked,
+.recovery-success,
+.recovery-error {
+  padding: 22px 28px;
+}
+
+.recovery-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 22px;
+  margin: 0;
+  border-top: 1px solid #1b2d32;
+}
+
+.recovery-summary > div,
+.recovery-state-panel dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid #1b2d32;
+}
+
+.recovery-summary dt,
+.recovery-state-panel dt {
+  color: #769094;
+  font-size: 11px;
+}
+
+.recovery-summary dd,
+.recovery-state-panel dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #e1ebec;
+  font-size: 12px;
+  text-align: right;
+}
+
+.recovery-ready-status {
+  color: #5df1c9 !important;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.recovery-state-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.recovery-state-panel {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid #20363b;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.recovery-state-panel h3,
+.recovery-changed-fields h3 {
+  margin: 0 0 9px;
+  color: #91a7aa;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+}
+
+.recovery-state-panel dl {
+  margin: 0;
+}
+
+.recovery-state-panel p,
+.recovery-changed-fields p {
+  margin: 0;
+  color: #718588;
+  font-size: 12px;
+}
+
+.recovery-state-panel dl > div:last-child {
+  border-bottom: 0;
+}
+
+.recovery-changed-fields {
+  padding: 19px 0 5px;
+}
+
+.recovery-changed-fields ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recovery-changed-fields li {
+  padding: 6px 9px;
+  border: 1px solid #294147;
+  color: #b5c8ca;
+  font-size: 11px;
+}
+
+.recovery-backend-status {
+  margin: 14px 0 0;
+  color: #718588;
+  font-size: 11px;
+}
+
+.recovery-blocked {
+  border-bottom: 1px solid #1b2d32;
+}
+
+.recovery-admin-override {
+  display: grid;
+  gap: 12px;
+  padding: 18px 28px;
+  border-top: 1px solid #513c2d;
+  border-bottom: 1px solid #1b2d32;
+  background: rgba(255, 180, 119, 0.035);
+}
+
+.recovery-admin-override > strong {
+  color: #ffb477;
+  font-size: 13px;
+}
+
+.recovery-admin-override p {
+  margin: 0;
+  color: #a9babc;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.recovery-admin-override label {
+  display: grid;
+  gap: 7px;
+  color: #9bb0b3;
+  font-size: 11px;
+}
+
+.recovery-admin-override textarea,
+.recovery-admin-override input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #294147;
+  border-radius: 4px;
+  color: #e7eff0;
+  background: #071116;
+}
+
+.recovery-admin-override textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.recovery-blocked strong,
+.recovery-error strong {
+  color: #ffb477;
+  font-size: 13px;
+}
+
+.recovery-blocked p,
+.recovery-success p,
+.recovery-error p {
+  margin: 9px 0 0;
+  color: #a9babc;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.recovery-blocked small {
+  display: block;
+  margin-top: 14px;
+  color: #718588;
+  font-size: 11px;
+}
+
+.recovery-success p:first-child {
+  color: #5df1c9;
+}
+
+.recovery-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 28px 22px;
+  border-top: 1px solid #1b2d32;
+}
+
+.recovery-dialog-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+@media (max-width: 600px) {
+  .recovery-overlay {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .recovery-dialog {
+    max-height: none;
+    margin: 12px 0;
+  }
+
+  .recovery-dialog-header,
+  .recovery-details,
+  .recovery-blocked,
+  .recovery-admin-override,
+  .recovery-success,
+  .recovery-error {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .recovery-summary,
+  .recovery-state-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .recovery-dialog-actions {
+    flex-wrap: wrap;
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+}

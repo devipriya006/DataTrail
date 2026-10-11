@@ -54,6 +54,7 @@ public class RecoveryActionService {
 
         RecoveryAction recoveryAction = new RecoveryAction(
                 changeAnalysis,
+                null,
                 recommendedSql,
                 recoveryType,
                 approvalStatus,

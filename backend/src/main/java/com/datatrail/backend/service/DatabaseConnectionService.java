@@ -438,7 +438,7 @@ public class DatabaseConnectionService {
         }
     }
 
-    private Connection openTargetConnection(DatabaseConnection connection) throws SQLException {
+    public Connection openTargetConnection(DatabaseConnection connection) throws SQLException {
         // TODO: Decrypt this plaintext field after credential encryption is implemented.
         return DriverManager.getConnection(
                 buildPostgresJdbcUrl(connection),

@@ -37,6 +37,9 @@ public class RecoveryExecution {
     @JoinColumn(name = "executed_by")
     private User executedBy;
 
+    @Column(name = "audit_event_id")
+    private Long auditEventId;
+
     protected RecoveryExecution() {
     }
 
@@ -130,5 +133,13 @@ public class RecoveryExecution {
 
     public void setExecutedBy(User executedBy) {
         this.executedBy = executedBy;
+    }
+
+    public Long getAuditEventId() {
+        return auditEventId;
+    }
+
+    public void setAuditEventId(Long auditEventId) {
+        this.auditEventId = auditEventId;
     }
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { clearSession, getSession } from "../auth";
+import RecoveryPreview from "../components/recovery/RecoveryPreview";
 import "../styles/global.css";
 import "../styles/dashboard.css";
 
@@ -200,6 +201,7 @@ function AuditLogs() {
   const [dateTo, setDateTo] = useState("");
   const [searchText, setSearchText] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [recoveryAuditId, setRecoveryAuditId] = useState<number | null>(null);
 
   const username = session?.username ?? "User";
   const role = session?.role ?? "USER";
@@ -755,6 +757,13 @@ function AuditLogs() {
                   (row) => row.changed
                 );
 
+              const canRecover =
+                log.operation === "UPDATE" &&
+                !log.transactionId?.toLowerCase().startsWith("recovery-") &&
+                Boolean(beforeState && Object.keys(beforeState).length) &&
+                Boolean(afterState && Object.keys(afterState).length) &&
+                changedRows.length > 0;
+
               const unchangedRows =
                 comparisonRows.filter(
                   (row) => !row.changed
@@ -942,6 +951,17 @@ function AuditLogs() {
                           </div>
                         </details>
                       )}
+
+                      {canRecover && (
+                        <div className="audit-recovery-action">
+                          <button
+                            className="new-project-button"
+                            onClick={() => setRecoveryAuditId(log.auditId)}
+                          >
+                            Recover previous state
+                          </button>
+                        </div>
+                      )}
                     </>
                   )}
 
@@ -1091,6 +1111,17 @@ function AuditLogs() {
           </section>
         )}
       </section>
+
+      {recoveryAuditId !== null && session?.accessToken && (
+        <RecoveryPreview
+          auditId={recoveryAuditId}
+          accessToken={session.accessToken}
+          onClose={() => setRecoveryAuditId(null)}
+          onUnauthorized={handleUnauthorized}
+          onCompleted={() => void loadLogs(true)}
+          isAdmin={role.toUpperCase() === "ADMIN"}
+        />
+      )}
     </main>
   );
 }
