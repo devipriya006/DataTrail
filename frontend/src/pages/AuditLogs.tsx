@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { clearSession, getSession } from "../auth";
 import RecoveryPreview from "../components/recovery/RecoveryPreview";
@@ -19,6 +19,39 @@ type AuditLogItem = {
   logHash: string;
   prevHash?: string | null;
   chainSequence: number;
+};
+
+type ProvenanceTraceItem = {
+  edgeId: number;
+  fromAuditId: number;
+  toAuditId: number;
+  relationshipType: string;
+  edgeWeight: number | null;
+  inferenceMethod: string | null;
+  snapshotId: number | null;
+  edgeCreatedAt: string | null;
+  fromOperation: string;
+  fromSchemaName: string;
+  fromTableName: string;
+  fromEventTimestamp: string | null;
+  fromChangedFieldNames: string[];
+  fromChangedFieldCount: number | null;
+  toOperation: string;
+  toSchemaName: string;
+  toTableName: string;
+  toEventTimestamp: string | null;
+  toChangedFieldNames: string[];
+  toChangedFieldCount: number | null;
+};
+
+type ProvenanceGraphNode = {
+  auditId: number;
+  operation: string;
+  schemaName: string;
+  tableName: string;
+  eventTimestamp: string | null;
+  changedFieldNames: string[];
+  changedFieldCount: number | null;
 };
 
 type JsonState = Record<string, unknown>;
@@ -201,7 +234,24 @@ function AuditLogs() {
   const [dateTo, setDateTo] = useState("");
   const [searchText, setSearchText] = useState("");
   const [refreshing, setRefreshing] = useState(false);
-  const [recoveryAuditId, setRecoveryAuditId] = useState<number | null>(null);
+
+  const [recoveryAuditId, setRecoveryAuditId] =
+    useState<number | null>(null);
+
+  const [traceAuditId, setTraceAuditId] =
+    useState<number | null>(null);
+  const [traceItems, setTraceItems] =
+    useState<ProvenanceTraceItem[]>([]);
+  const [traceLoading, setTraceLoading] = useState(false);
+  const [traceError, setTraceError] = useState("");
+  const tracePanelRef = useRef<HTMLElement | null>(null);
+    const [edgeFromAuditId, setEdgeFromAuditId] = useState("");
+  const [edgeToAuditId, setEdgeToAuditId] = useState("");
+  const [edgeRelationshipType, setEdgeRelationshipType] = useState("RELATED_TO");
+  const [edgeEvidence, setEdgeEvidence] = useState("");
+  const [edgeWeight, setEdgeWeight] = useState("");
+  const [edgeSaving, setEdgeSaving] = useState(false);
+  const [edgeMessage, setEdgeMessage] = useState("");
 
   const username = session?.username ?? "User";
   const role = session?.role ?? "USER";
@@ -210,6 +260,124 @@ function AuditLogs() {
     clearSession();
     navigate("/login", { replace: true });
   }, [navigate]);
+
+  const loadProvenanceTrace = async (auditId: number) => {
+    if (!projectId || !session?.accessToken) {
+      setTraceError("Project or login session is missing.");
+      return;
+    }
+
+    setTraceAuditId(auditId);
+    setTraceItems([]);
+    setTraceError("");
+    setTraceLoading(true);
+
+    try {
+      const response = await fetch(
+        `http://localhost:8080/provenance-edges/project/${projectId}/audit/${auditId}/trace`,
+        {
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+          },
+        }
+      );
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      if (!response.ok) {
+        setTraceError(
+          response.status === 403
+            ? "You are not allowed to trace this project's audit events."
+            : response.status === 404
+              ? "The audit event was not found in this project."
+              : "Unable to load provenance trace."
+        );
+        return;
+      }
+
+      const data: ProvenanceTraceItem[] = await response.json();
+      setTraceItems(data);
+    } catch {
+      setTraceError("Unable to connect to DataTrail.");
+    } finally {
+      setTraceLoading(false);
+    }
+  };
+
+    const createProvenanceEdge = async (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    if (!projectId || !session?.accessToken) {
+      setEdgeMessage("Project or login session is missing.");
+      return;
+    }
+
+    if (!edgeFromAuditId || !edgeToAuditId) {
+      setEdgeMessage("Select both audit events.");
+      return;
+    }
+
+    if (edgeFromAuditId === edgeToAuditId) {
+      setEdgeMessage("Choose two different audit events.");
+      return;
+    }
+
+    if (!edgeEvidence.trim()) {
+      setEdgeMessage("Enter evidence for this relationship.");
+      return;
+    }
+
+    setEdgeSaving(true);
+    setEdgeMessage("");
+
+    try {
+      const response = await fetch(
+        `http://localhost:8080/provenance-edges/project/${projectId}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            fromAuditId: Number(edgeFromAuditId),
+            toAuditId: Number(edgeToAuditId),
+            relationshipType: edgeRelationshipType,
+            inferenceMethod: edgeEvidence.trim(),
+            edgeWeight: edgeWeight === "" ? null : Number(edgeWeight),
+          }),
+        }
+      );
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      if (!response.ok) {
+        const message = await response.text();
+        setEdgeMessage(
+          `Could not save relationship (${response.status}). ${message}`
+        );
+        return;
+      }
+
+      setEdgeMessage("Relationship saved.");
+      setEdgeEvidence("");
+      setEdgeWeight("");
+
+      await loadProvenanceTrace(Number(edgeFromAuditId));
+    } catch {
+      setEdgeMessage("Unable to connect to DataTrail.");
+    } finally {
+      setEdgeSaving(false);
+    }
+  };
 
   const loadLogs = useCallback(
     async (showRefreshState = false) => {
@@ -321,6 +489,15 @@ function AuditLogs() {
     void loadLogs();
   }, [loadLogs]);
 
+  useEffect(() => {
+    if (traceAuditId !== null) {
+      tracePanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  }, [traceAuditId]);
+
   const tableOptions = useMemo(() => {
     const values = new Set(
       logs.map((log) => log.tableName)
@@ -367,6 +544,47 @@ function AuditLogs() {
     });
   }, [logs, searchText]);
 
+  const provenanceNodes = useMemo(() => {
+    const nodes = new Map<number, ProvenanceGraphNode>();
+
+    for (const edge of traceItems) {
+      if (!nodes.has(edge.fromAuditId)) {
+        nodes.set(edge.fromAuditId, {
+          auditId: edge.fromAuditId,
+          operation: edge.fromOperation,
+          schemaName: edge.fromSchemaName,
+          tableName: edge.fromTableName,
+          eventTimestamp: edge.fromEventTimestamp,
+          changedFieldNames: edge.fromChangedFieldNames,
+          changedFieldCount: edge.fromChangedFieldCount,
+        });
+      }
+
+      if (!nodes.has(edge.toAuditId)) {
+        nodes.set(edge.toAuditId, {
+          auditId: edge.toAuditId,
+          operation: edge.toOperation,
+          schemaName: edge.toSchemaName,
+          tableName: edge.toTableName,
+          eventTimestamp: edge.toEventTimestamp,
+          changedFieldNames: edge.toChangedFieldNames,
+          changedFieldCount: edge.toChangedFieldCount,
+        });
+      }
+    }
+
+    return Array.from(nodes.values()).sort((left, right) => {
+      const leftTime = left.eventTimestamp
+        ? new Date(left.eventTimestamp).getTime()
+        : 0;
+      const rightTime = right.eventTimestamp
+        ? new Date(right.eventTimestamp).getTime()
+        : 0;
+
+      return leftTime - rightTime || left.auditId - right.auditId;
+    });
+  }, [traceItems]);
+
   const clearFilters = () => {
     setOperation("ALL");
     setTableFilter("ALL");
@@ -374,6 +592,13 @@ function AuditLogs() {
     setDateFrom("");
     setDateTo("");
     setSearchText("");
+  };
+
+  const closeTrace = () => {
+    setTraceAuditId(null);
+    setTraceItems([]);
+    setTraceError("");
+    setTraceLoading(false);
   };
 
   if (!projectId) {
@@ -392,19 +617,13 @@ function AuditLogs() {
               <p className="dashboard-eyebrow">
                 PROVENANCE INTELLIGENCE ENGINE
               </p>
-
               <h1>Audit Logs</h1>
             </div>
           </header>
 
           <section className="dashboard-panel audit-empty">
-            <p className="section-label">
-              PROJECT REQUIRED
-            </p>
-
-            <h3>
-              Select a project to view audit logs.
-            </h3>
+            <p className="section-label">PROJECT REQUIRED</p>
+            <h3>Select a project to view audit logs.</h3>
 
             <button
               className="new-project-button"
@@ -446,9 +665,7 @@ function AuditLogs() {
 
           <button
             className="nav-item"
-            onClick={() =>
-              navigate(`/projects/${projectId}`)
-            }
+            onClick={() => navigate(`/projects/${projectId}`)}
           >
             <span>⌂</span>
             Overview
@@ -457,9 +674,7 @@ function AuditLogs() {
           <button
             className="nav-item"
             onClick={() =>
-              navigate(
-                `/projects/${projectId}/connections`
-              )
+              navigate(`/projects/${projectId}/connections`)
             }
           >
             <span>◉</span>
@@ -469,9 +684,7 @@ function AuditLogs() {
           <button
             className="nav-item active"
             onClick={() =>
-              navigate(
-                `/projects/${projectId}/audit-logs`
-              )
+              navigate(`/projects/${projectId}/audit-logs`)
             }
           >
             <span>⌁</span>
@@ -487,7 +700,6 @@ function AuditLogs() {
             <p className="dashboard-eyebrow">
               PROVENANCE INTELLIGENCE ENGINE
             </p>
-
             <h1>Audit Logs</h1>
           </div>
 
@@ -506,26 +718,20 @@ function AuditLogs() {
         {/* INTRO */}
         <section className="dashboard-welcome">
           <div>
-            <p className="section-label">
-              DATABASE PROVENANCE
-            </p>
+            <p className="section-label">DATABASE PROVENANCE</p>
 
             <h2>
-              Track who changed what, when, and how the
-              data changed.
+              Track who changed what, when, and how the data changed.
             </h2>
 
             <p>
-              Every captured database event remains part
-              of the project history.
+              Every captured database event remains part of the project history.
             </p>
           </div>
 
           <button
             className="new-project-button"
-            onClick={() =>
-              navigate(`/projects/${projectId}`)
-            }
+            onClick={() => navigate(`/projects/${projectId}`)}
           >
             ← Back to project
           </button>
@@ -535,13 +741,8 @@ function AuditLogs() {
         <section className="dashboard-panel audit-toolbar">
           <div className="audit-toolbar-header">
             <div>
-              <p className="section-label">
-                INVESTIGATION
-              </p>
-
-              <h3>
-                Search and filter changes
-              </h3>
+              <p className="section-label">INVESTIGATION</p>
+              <h3>Search and filter changes</h3>
             </div>
 
             <div className="audit-toolbar-actions">
@@ -565,16 +766,11 @@ function AuditLogs() {
           <div className="audit-filters-grid">
             <label>
               Operation
-
               <select
                 value={operation}
-                onChange={(event) =>
-                  setOperation(event.target.value)
-                }
+                onChange={(event) => setOperation(event.target.value)}
               >
-                <option value="ALL">
-                  All operations
-                </option>
+                <option value="ALL">All operations</option>
                 <option value="INSERT">INSERT</option>
                 <option value="UPDATE">UPDATE</option>
                 <option value="DELETE">DELETE</option>
@@ -583,20 +779,13 @@ function AuditLogs() {
 
             <label>
               Table
-
               <select
                 value={tableFilter}
-                onChange={(event) =>
-                  setTableFilter(event.target.value)
-                }
+                onChange={(event) => setTableFilter(event.target.value)}
               >
                 <option value="ALL">All tables</option>
-
                 {tableOptions.map((tableName) => (
-                  <option
-                    key={tableName}
-                    value={tableName}
-                  >
+                  <option key={tableName} value={tableName}>
                     {tableName}
                   </option>
                 ))}
@@ -605,50 +794,38 @@ function AuditLogs() {
 
             <label>
               Changed by
-
               <input
                 type="text"
                 value={userFilter}
-                onChange={(event) =>
-                  setUserFilter(event.target.value)
-                }
+                onChange={(event) => setUserFilter(event.target.value)}
                 placeholder="postgres"
               />
             </label>
 
             <label>
               From
-
               <input
                 type="datetime-local"
                 value={dateFrom}
-                onChange={(event) =>
-                  setDateFrom(event.target.value)
-                }
+                onChange={(event) => setDateFrom(event.target.value)}
               />
             </label>
 
             <label>
               To
-
               <input
                 type="datetime-local"
                 value={dateTo}
-                onChange={(event) =>
-                  setDateTo(event.target.value)
-                }
+                onChange={(event) => setDateTo(event.target.value)}
               />
             </label>
 
             <label>
               Search
-
               <input
                 type="search"
                 value={searchText}
-                onChange={(event) =>
-                  setSearchText(event.target.value)
-                }
+                onChange={(event) => setSearchText(event.target.value)}
                 placeholder="table, record, email..."
               />
             </label>
@@ -656,16 +833,10 @@ function AuditLogs() {
 
           <div className="audit-result-summary">
             <span>
-              Showing{" "}
-              <strong>{filteredLogs.length}</strong>{" "}
-              {filteredLogs.length === 1
-                ? "change"
-                : "changes"}
+              Showing <strong>{filteredLogs.length}</strong>{" "}
+              {filteredLogs.length === 1 ? "change" : "changes"}
             </span>
-
-            <span>
-              Project #{projectId}
-            </span>
+            <span>Project #{projectId}</span>
           </div>
         </section>
 
@@ -675,10 +846,7 @@ function AuditLogs() {
             className="dashboard-panel audit-empty"
             role="alert"
           >
-            <p className="section-label">
-              AUDIT ERROR
-            </p>
-
+            <p className="section-label">AUDIT ERROR</p>
             <h3>{error}</h3>
           </section>
         )}
@@ -686,27 +854,17 @@ function AuditLogs() {
         {/* LOADING / EMPTY / RESULTS */}
         {loading ? (
           <section className="dashboard-panel audit-empty">
-            <p className="section-label">
-              LOADING
-            </p>
-
+            <p className="section-label">LOADING</p>
             <h3>Loading audit events...</h3>
           </section>
         ) : filteredLogs.length === 0 ? (
           <section className="dashboard-panel audit-empty">
-            <p className="section-label">
-              NO MATCHING EVENTS
-            </p>
-
-            <h3>
-              No database changes match the current
-              filters.
-            </h3>
+            <p className="section-label">NO MATCHING EVENTS</p>
+            <h3>No database changes match the current filters.</h3>
 
             <p>
-              Configure a monitored table and perform an
-              INSERT, UPDATE, or DELETE to generate an
-              audit event.
+              Configure a monitored table and perform an INSERT, UPDATE,
+              or DELETE to generate an audit event.
             </p>
 
             <div className="audit-empty-actions">
@@ -720,9 +878,7 @@ function AuditLogs() {
               <button
                 className="panel-link"
                 onClick={() =>
-                  navigate(
-                    `/projects/${projectId}/connections`
-                  )
+                  navigate(`/projects/${projectId}/connections`)
                 }
               >
                 Open Database →
@@ -746,28 +902,29 @@ function AuditLogs() {
 
               const comparisonRows =
                 log.operation === "UPDATE"
-                  ? buildComparisonRows(
-                      beforeState,
-                      afterState
-                    )
+                  ? buildComparisonRows(beforeState, afterState)
                   : [];
 
-              const changedRows =
-                comparisonRows.filter(
-                  (row) => row.changed
-                );
+              const changedRows = comparisonRows.filter(
+                (row) => row.changed
+              );
 
               const canRecover =
                 log.operation === "UPDATE" &&
-                !log.transactionId?.toLowerCase().startsWith("recovery-") &&
-                Boolean(beforeState && Object.keys(beforeState).length) &&
-                Boolean(afterState && Object.keys(afterState).length) &&
+                !log.transactionId
+                  ?.toLowerCase()
+                  .startsWith("recovery-") &&
+                Boolean(
+                  beforeState && Object.keys(beforeState).length
+                ) &&
+                Boolean(
+                  afterState && Object.keys(afterState).length
+                ) &&
                 changedRows.length > 0;
 
-              const unchangedRows =
-                comparisonRows.filter(
-                  (row) => !row.changed
-                );
+              const unchangedRows = comparisonRows.filter(
+                (row) => !row.changed
+              );
 
               return (
                 <article
@@ -785,39 +942,22 @@ function AuditLogs() {
 
                       <div>
                         <h3>
-                          {log.schemaName}.
-                          {log.tableName}
+                          {log.schemaName}.{log.tableName}
                         </h3>
-
                         <p>
-                          {getOperationLabel(
-                            log.operation
-                          )}{" "}
-                          database record
+                          {getOperationLabel(log.operation)} database record
                         </p>
                       </div>
                     </div>
 
                     <div className="audit-card-meta">
                       <span>
-                        Record ID:{" "}
-                        <strong>
-                          {recordId ?? "n/a"}
-                        </strong>
+                        Record ID: <strong>{recordId ?? "n/a"}</strong>
                       </span>
-
                       <span>
-                        Changed by:{" "}
-                        <strong>
-                          {log.changedBy || "system"}
-                        </strong>
+                        Changed by: <strong>{log.changedBy || "system"}</strong>
                       </span>
-
-                      <span>
-                        {formatTimestamp(
-                          log.eventTimestamp
-                        )}
-                      </span>
+                      <span>{formatTimestamp(log.eventTimestamp)}</span>
                     </div>
                   </div>
 
@@ -833,24 +973,17 @@ function AuditLogs() {
 
                           {changedRows.length > 0 ? (
                             <div className="audit-compare-list">
-                              {changedRows.map(
-                                (row) => (
-                                  <div
-                                    key={`${log.auditId}-before-${row.keyName}`}
-                                    className="compare-row changed"
-                                  >
-                                    <span>
-                                      {row.keyName}
-                                    </span>
-
-                                    <strong>
-                                      {formatValue(
-                                        row.beforeValue
-                                      )}
-                                    </strong>
-                                  </div>
-                                )
-                              )}
+                              {changedRows.map((row) => (
+                                <div
+                                  key={`${log.auditId}-before-${row.keyName}`}
+                                  className="compare-row changed"
+                                >
+                                  <span>{row.keyName}</span>
+                                  <strong>
+                                    {formatValue(row.beforeValue)}
+                                  </strong>
+                                </div>
+                              ))}
                             </div>
                           ) : (
                             <p className="muted">
@@ -867,24 +1000,17 @@ function AuditLogs() {
 
                           {changedRows.length > 0 ? (
                             <div className="audit-compare-list">
-                              {changedRows.map(
-                                (row) => (
-                                  <div
-                                    key={`${log.auditId}-after-${row.keyName}`}
-                                    className="compare-row changed"
-                                  >
-                                    <span>
-                                      {row.keyName}
-                                    </span>
-
-                                    <strong>
-                                      {formatValue(
-                                        row.afterValue
-                                      )}
-                                    </strong>
-                                  </div>
-                                )
-                              )}
+                              {changedRows.map((row) => (
+                                <div
+                                  key={`${log.auditId}-after-${row.keyName}`}
+                                  className="compare-row changed"
+                                >
+                                  <span>{row.keyName}</span>
+                                  <strong>
+                                    {formatValue(row.afterValue)}
+                                  </strong>
+                                </div>
+                              ))}
                             </div>
                           ) : (
                             <p className="muted">
@@ -898,26 +1024,21 @@ function AuditLogs() {
                         <div className="audit-change-list">
                           <div className="audit-panel-heading">
                             <p>Changed fields</p>
-
                             <span>
                               {changedRows.length}{" "}
-                              {changedRows.length === 1
-                                ? "field"
-                                : "fields"}
+                              {changedRows.length === 1 ? "field" : "fields"}
                             </span>
                           </div>
 
                           <div className="audit-change-items">
-                            {changedRows.map(
-                              (row) => (
-                                <span
-                                  key={`${log.auditId}-${row.keyName}`}
-                                  className="audit-change-tag"
-                                >
-                                  {row.keyName}
-                                </span>
-                              )
-                            )}
+                            {changedRows.map((row) => (
+                              <span
+                                key={`${log.auditId}-${row.keyName}`}
+                                className="audit-change-tag"
+                              >
+                                {row.keyName}
+                              </span>
+                            ))}
                           </div>
                         </div>
                       )}
@@ -925,42 +1046,23 @@ function AuditLogs() {
                       {unchangedRows.length > 0 && (
                         <details className="audit-unchanged-details">
                           <summary>
-                            Show unchanged fields (
-                            {unchangedRows.length})
+                            Show unchanged fields ({unchangedRows.length})
                           </summary>
 
                           <div className="audit-compare-list">
-                            {unchangedRows.map(
-                              (row) => (
-                                <div
-                                  key={`${log.auditId}-unchanged-${row.keyName}`}
-                                  className="compare-row unchanged"
-                                >
-                                  <span>
-                                    {row.keyName}
-                                  </span>
-
-                                  <strong>
-                                    {formatValue(
-                                      row.afterValue
-                                    )}
-                                  </strong>
-                                </div>
-                              )
-                            )}
+                            {unchangedRows.map((row) => (
+                              <div
+                                key={`${log.auditId}-unchanged-${row.keyName}`}
+                                className="compare-row unchanged"
+                              >
+                                <span>{row.keyName}</span>
+                                <strong>
+                                  {formatValue(row.afterValue)}
+                                </strong>
+                              </div>
+                            ))}
                           </div>
                         </details>
-                      )}
-
-                      {canRecover && (
-                        <div className="audit-recovery-action">
-                          <button
-                            className="new-project-button"
-                            onClick={() => setRecoveryAuditId(log.auditId)}
-                          >
-                            Recover previous state
-                          </button>
-                        </div>
                       )}
                     </>
                   )}
@@ -974,31 +1076,21 @@ function AuditLogs() {
                           <span>Inserted state</span>
                         </div>
 
-                        {afterState &&
-                        Object.keys(afterState).length >
-                          0 ? (
+                        {afterState && Object.keys(afterState).length > 0 ? (
                           <div className="audit-compare-list">
-                            {Object.entries(
-                              afterState
-                            ).map(
-                              ([key, value]) => (
-                                <div
-                                  key={`${log.auditId}-${key}`}
-                                  className="compare-row"
-                                >
-                                  <span>{key}</span>
-
-                                  <strong>
-                                    {formatValue(value)}
-                                  </strong>
-                                </div>
-                              )
-                            )}
+                            {Object.entries(afterState).map(([key, value]) => (
+                              <div
+                                key={`${log.auditId}-${key}`}
+                                className="compare-row"
+                              >
+                                <span>{key}</span>
+                                <strong>{formatValue(value)}</strong>
+                              </div>
+                            ))}
                           </div>
                         ) : (
                           <p className="muted">
-                            No inserted values were
-                            captured.
+                            No inserted values were captured.
                           </p>
                         )}
                       </div>
@@ -1014,66 +1106,73 @@ function AuditLogs() {
                           <span>Previous state</span>
                         </div>
 
-                        {beforeState &&
-                        Object.keys(beforeState).length >
-                          0 ? (
+                        {beforeState && Object.keys(beforeState).length > 0 ? (
                           <div className="audit-compare-list">
-                            {Object.entries(
-                              beforeState
-                            ).map(
-                              ([key, value]) => (
-                                <div
-                                  key={`${log.auditId}-${key}-delete`}
-                                  className="compare-row"
-                                >
-                                  <span>{key}</span>
-
-                                  <strong>
-                                    {formatValue(value)}
-                                  </strong>
-                                </div>
-                              )
-                            )}
+                            {Object.entries(beforeState).map(([key, value]) => (
+                              <div
+                                key={`${log.auditId}-${key}-delete`}
+                                className="compare-row"
+                              >
+                                <span>{key}</span>
+                                <strong>{formatValue(value)}</strong>
+                              </div>
+                            ))}
                           </div>
                         ) : (
                           <p className="muted">
-                            No deleted values were
-                            captured.
+                            No deleted values were captured.
                           </p>
                         )}
                       </div>
                     </div>
                   )}
 
+                  {/* AUDIT ACTIONS */}
+                  <div className="audit-recovery-action">
+                    {canRecover && (
+                      <button
+                        type="button"
+                        className="new-project-button"
+                        onClick={() => setRecoveryAuditId(log.auditId)}
+                      >
+                        Recover previous state
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      className="new-project-button"
+                      onClick={() =>
+                        void loadProvenanceTrace(log.auditId)
+                      }
+                      disabled={traceLoading}
+                    >
+                      {traceLoading && traceAuditId === log.auditId
+                        ? "Loading trace..."
+                        : "Trace provenance"}
+                    </button>
+                  </div>
+
                   {/* TECHNICAL DETAILS */}
                   <details className="audit-technical-details">
-                    <summary>
-                      Technical details
-                    </summary>
+                    <summary>Technical details</summary>
 
                     <div className="audit-technical-grid">
                       <div>
                         <span>Transaction ID</span>
-                        <code>
-                          {log.transactionId || "n/a"}
-                        </code>
+                        <code>{log.transactionId || "n/a"}</code>
                       </div>
 
                       <div>
                         <span>Chain sequence</span>
-                        <strong>
-                          #{log.chainSequence}
-                        </strong>
+                        <strong>#{log.chainSequence}</strong>
                       </div>
 
                       <div>
                         <span>Previous hash</span>
                         <code>
                           {log.prevHash
-                            ? `${log.prevHash.slice(
-                                0,
-                                16
-                              )}...`
+                            ? `${log.prevHash.slice(0, 16)}...`
                             : "Genesis"}
                         </code>
                       </div>
@@ -1082,26 +1181,19 @@ function AuditLogs() {
                         <span>Event hash</span>
                         <code>
                           {log.logHash
-                            ? `${log.logHash.slice(
-                                0,
-                                16
-                              )}...`
+                            ? `${log.logHash.slice(0, 16)}...`
                             : "Unavailable"}
                         </code>
                       </div>
 
                       <div>
                         <span>Audit ID</span>
-                        <strong>
-                          #{log.auditId}
-                        </strong>
+                        <strong>#{log.auditId}</strong>
                       </div>
 
                       <div>
                         <span>Configuration ID</span>
-                        <strong>
-                          #{log.configId}
-                        </strong>
+                        <strong>#{log.configId}</strong>
                       </div>
                     </div>
                   </details>
@@ -1110,8 +1202,197 @@ function AuditLogs() {
             })}
           </section>
         )}
+
+        {/* PROVENANCE TRACE RESULTS */}
+        {traceAuditId !== null && (
+        <section className="dashboard-panel" ref={tracePanelRef}>
+            <div className="audit-card-header">
+              <div>
+                <p className="section-label">PROVENANCE TRACE</p>
+                <h2>Audit #{traceAuditId}</h2>
+              </div>
+
+              <button
+                type="button"
+                className="new-project-button"
+                onClick={closeTrace}
+              >
+                Close trace
+              </button>
+            </div>
+                        <form onSubmit={createProvenanceEdge} className="dashboard-panel">
+              <h3>Add an explicit provenance relationship</h3>
+
+              <label>
+                Source audit event
+                <select
+                  value={edgeFromAuditId}
+                  onChange={(e) => setEdgeFromAuditId(e.target.value)}
+                  required
+                >
+                  <option value="">Select source</option>
+                  {logs.map((log) => (
+                    <option key={log.auditId} value={log.auditId}>
+                      #{log.auditId} — {log.operation}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Target audit event
+                <select
+                  value={edgeToAuditId}
+                  onChange={(e) => setEdgeToAuditId(e.target.value)}
+                  required
+                >
+                  <option value="">Select target</option>
+                  {logs.map((log) => (
+                    <option key={log.auditId} value={log.auditId}>
+                      #{log.auditId} — {log.operation}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Relationship type
+                <select
+                  value={edgeRelationshipType}
+                  onChange={(e) => setEdgeRelationshipType(e.target.value)}
+                  required
+                >
+                  <option value="RELATED_TO">Related to</option>
+                  <option value="DERIVED_FROM">Derived from</option>
+                  <option value="SUPPORTS">Supports</option>
+                  <option value="CORRELATES_WITH">Correlates with</option>
+                </select>
+              </label>
+
+              <label>
+                Evidence or explanation (required)
+                <input
+                  value={edgeEvidence}
+                  onChange={(e) => setEdgeEvidence(e.target.value)}
+                  maxLength={100}
+                  placeholder="Explain the evidence for this relationship"
+                  required
+                />
+              </label>
+
+              <label>
+                Weight (optional, 0–1)
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={edgeWeight}
+                  onChange={(e) => setEdgeWeight(e.target.value)}
+                />
+              </label>
+
+              <button type="submit" disabled={edgeSaving}>
+                {edgeSaving ? "Saving..." : "Save relationship"}
+              </button>
+
+              {edgeMessage && <p role="status">{edgeMessage}</p>}
+            </form>
+
+            {traceLoading && <p>Loading provenance trace...</p>}
+
+            {traceError && <p role="alert">{traceError}</p>}
+
+            {!traceLoading &&
+              !traceError &&
+              traceItems.length === 0 && (
+                <p>
+                  No connected provenance edges were found for this event.
+                </p>
+              )}
+
+            {!traceLoading && traceItems.length > 0 && (
+              <div className="provenance-graph">
+                <h3>Connected audit events</h3>
+                <div className="provenance-graph-nodes">
+                  {provenanceNodes.map((node) => (
+                    <article
+                      className="provenance-event-node"
+                      key={node.auditId}
+                      data-audit-id={node.auditId}
+                    >
+                      <p className="section-label">AUDIT EVENT</p>
+                      <h3>Audit #{node.auditId} · {node.operation}</h3>
+                      <p>{node.schemaName}.{node.tableName}</p>
+                      <p>
+                        {node.eventTimestamp
+                          ? formatTimestamp(node.eventTimestamp)
+                          : "Timestamp unavailable"}
+                      </p>
+                      <p className="provenance-change-count">
+                        {node.changedFieldCount === null
+                          ? "Field-change summary unavailable"
+                          : `${node.changedFieldCount} changed fields`}
+                      </p>
+                      {node.changedFieldNames.length > 0 && (
+                        <ul className="provenance-changed-fields">
+                          {node.changedFieldNames.map((field) => (
+                            <li key={field}>{field}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </article>
+                  ))}
+                </div>
+
+                <h3>Recorded relationships</h3>
+                <div className="provenance-graph-edges">
+                {traceItems.map((edge) => (
+                  <div className="provenance-flow" key={edge.edgeId}>
+                    <strong className="provenance-edge-endpoint">
+                      Audit #{edge.fromAuditId}
+                    </strong>
+
+                    <div className="provenance-edge-direction">
+                      <span className="provenance-recorded-label">
+                        User-recorded relationship
+                      </span>
+                      <small>Not independently verified</small>
+                      <strong>{edge.relationshipType}</strong>
+                      <span className="provenance-arrow" aria-hidden="true">
+                        →
+                      </span>
+                      {edge.inferenceMethod && (
+                        <small>
+                          User description: {edge.inferenceMethod}
+                        </small>
+                      )}
+                      {edge.edgeWeight !== null && (
+                        <small>Weight: {edge.edgeWeight}</small>
+                      )}
+                      {edge.snapshotId !== null && (
+                        <small>Snapshot #{edge.snapshotId}</small>
+                      )}
+                      {edge.edgeCreatedAt && (
+                        <small>
+                          Recorded {formatTimestamp(edge.edgeCreatedAt)}
+                        </small>
+                      )}
+                    </div>
+
+                    <strong className="provenance-edge-endpoint">
+                      Audit #{edge.toAuditId}
+                    </strong>
+                  </div>
+                ))}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
       </section>
 
+      {/* RECOVERY PREVIEW */}
       {recoveryAuditId !== null && session?.accessToken && (
         <RecoveryPreview
           auditId={recoveryAuditId}

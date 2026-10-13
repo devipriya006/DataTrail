@@ -4,6 +4,9 @@ import com.datatrail.backend.entity.ProvenanceEdge;
 import com.datatrail.backend.service.ProvenanceEdgeService;
 import org.springframework.web.bind.annotation.*;
 
+import com.datatrail.backend.dto.ProvenanceTraceResponse;
+import java.security.Principal;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -20,65 +23,90 @@ public class ProvenanceEdgeController {
         this.provenanceEdgeService = provenanceEdgeService;
     }
 
-    @PostMapping
-    public ProvenanceEdge createProvenanceEdge(
-            @RequestBody Map<String, Object> request) {
+    @PostMapping("/project/{projectId}")
+public ProvenanceEdge createProvenanceEdge(
+        @PathVariable Long projectId,
+        @RequestBody Map<String, Object> request,
+        Principal principal) {
 
-        Long fromAuditId = Long.valueOf(
-                request.get("fromAuditId").toString()
+    Long fromAuditId = Long.valueOf(
+            request.get("fromAuditId").toString());
+
+    Long toAuditId = Long.valueOf(
+            request.get("toAuditId").toString());
+
+    String relationshipType =
+            (String) request.get("relationshipType");
+
+    Double edgeWeight = request.get("edgeWeight") != null
+            ? Double.valueOf(request.get("edgeWeight").toString())
+            : null;
+
+    String inferenceMethod =
+            (String) request.get("inferenceMethod");
+
+    Long snapshotId = request.get("snapshotId") != null
+            ? Long.valueOf(request.get("snapshotId").toString())
+            : null;
+
+    LocalDateTime createdAt = request.get("createdAt") != null
+            ? LocalDateTime.parse(request.get("createdAt").toString())
+            : null;
+
+    return provenanceEdgeService.createProvenanceEdge(
+            projectId,
+            principal.getName(),
+            fromAuditId,
+            toAuditId,
+            relationshipType,
+            edgeWeight,
+            inferenceMethod,
+            snapshotId,
+            createdAt);
+}
+
+   @GetMapping("/project/{projectId}")
+public List<ProvenanceEdge> getAllProvenanceEdges(
+        @PathVariable Long projectId,
+        Principal principal) {
+
+    return provenanceEdgeService.getAllProvenanceEdges(
+            projectId, principal.getName());
+}
+
+@GetMapping("/project/{projectId}/{id}")
+public ProvenanceEdge getProvenanceEdgeById(
+        @PathVariable Long projectId,
+        @PathVariable Long id,
+        Principal principal) {
+
+    return provenanceEdgeService.getProvenanceEdgeById(
+            projectId, id, principal.getName());
+}
+
+@DeleteMapping("/project/{projectId}/{id}")
+public String deleteProvenanceEdge(
+        @PathVariable Long projectId,
+        @PathVariable Long id,
+        Principal principal) {
+
+    provenanceEdgeService.deleteProvenanceEdge(
+            projectId, id, principal.getName());
+
+    return "Provenance edge deleted successfully";
+}
+
+    @GetMapping("/project/{projectId}/audit/{auditId}/trace")
+    public List<ProvenanceTraceResponse> traceAuditEvent(
+            @PathVariable Long projectId,
+            @PathVariable Long auditId,
+            Principal principal) {
+
+        return provenanceEdgeService.traceAuditEvent(
+                projectId,
+                auditId,
+                principal.getName()
         );
-
-        Long toAuditId = Long.valueOf(
-                request.get("toAuditId").toString()
-        );
-
-        String relationshipType =
-                (String) request.get("relationshipType");
-
-        Double edgeWeight = request.get("edgeWeight") != null
-                ? Double.valueOf(request.get("edgeWeight").toString())
-                : null;
-
-        String inferenceMethod =
-                (String) request.get("inferenceMethod");
-
-        Long snapshotId = request.get("snapshotId") != null
-                ? Long.valueOf(request.get("snapshotId").toString())
-                : null;
-
-        LocalDateTime createdAt = request.get("createdAt") != null
-                ? LocalDateTime.parse(request.get("createdAt").toString())
-                : null;
-
-        return provenanceEdgeService.createProvenanceEdge(
-                fromAuditId,
-                toAuditId,
-                relationshipType,
-                edgeWeight,
-                inferenceMethod,
-                snapshotId,
-                createdAt
-        );
     }
 
-    @GetMapping
-    public List<ProvenanceEdge> getAllProvenanceEdges() {
-        return provenanceEdgeService.getAllProvenanceEdges();
-    }
-
-    @GetMapping("/{id}")
-    public ProvenanceEdge getProvenanceEdgeById(
-            @PathVariable Long id) {
-
-        return provenanceEdgeService.getProvenanceEdgeById(id);
-    }
-
-    @DeleteMapping("/{id}")
-    public String deleteProvenanceEdge(
-            @PathVariable Long id) {
-
-        provenanceEdgeService.deleteProvenanceEdge(id);
-
-        return "Provenance edge deleted successfully";
-    }
 }
