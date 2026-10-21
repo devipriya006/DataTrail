@@ -124,7 +124,14 @@ class ProvenanceEdgeServiceTest {
         assertEquals(List.of("name"),
                 result.get(0).toChangedFieldNames());
         assertEquals(1, result.get(0).toChangedFieldCount());
-        assertFalse(result.get(0).toString().contains("before"));
+        assertEquals("{\"status\":\"old\"}",
+                result.get(0).fromBeforeState());
+        assertEquals("{\"status\":\"new\"}",
+                result.get(0).fromAfterState());
+        assertEquals("{\"name\":\"before\"}",
+                result.get(0).toBeforeState());
+        assertEquals("{\"name\":\"after\"}",
+                result.get(0).toAfterState());
 
         verify(auditLogService)
                 .requireProjectAccess(10L, "owner");

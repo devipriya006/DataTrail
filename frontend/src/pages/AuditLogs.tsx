@@ -36,12 +36,16 @@ type ProvenanceTraceItem = {
   fromEventTimestamp: string | null;
   fromChangedFieldNames: string[];
   fromChangedFieldCount: number | null;
+  fromBeforeState: string | null;
+  fromAfterState: string | null;
   toOperation: string;
   toSchemaName: string;
   toTableName: string;
   toEventTimestamp: string | null;
   toChangedFieldNames: string[];
   toChangedFieldCount: number | null;
+  toBeforeState: string | null;
+  toAfterState: string | null;
 };
 
 type ProvenanceGraphNode = {
@@ -1349,22 +1353,22 @@ function AuditLogs() {
                 <div className="provenance-graph-edges">
                 {traceItems.map((edge) => (
                   <div className="provenance-flow" key={edge.edgeId}>
-                    <strong className="provenance-edge-endpoint">
-                      Audit #{edge.fromAuditId}
-                    </strong>
+                    <div className="provenance-edge-endpoint">
+                      <small>Source</small>
+                      <strong>Audit #{edge.fromAuditId}</strong>
+                    </div>
 
                     <div className="provenance-edge-direction">
                       <span className="provenance-recorded-label">
-                        User-recorded relationship
+                        Recorded relationship · not independently verified
                       </span>
-                      <small>Not independently verified</small>
                       <strong>{edge.relationshipType}</strong>
                       <span className="provenance-arrow" aria-hidden="true">
                         →
                       </span>
                       {edge.inferenceMethod && (
                         <small>
-                          User description: {edge.inferenceMethod}
+                          User-provided description: {edge.inferenceMethod}
                         </small>
                       )}
                       {edge.edgeWeight !== null && (
@@ -1380,9 +1384,89 @@ function AuditLogs() {
                       )}
                     </div>
 
-                    <strong className="provenance-edge-endpoint">
-                      Audit #{edge.toAuditId}
-                    </strong>
+                    <div className="provenance-edge-endpoint">
+                      <small>Target</small>
+                      <strong>Audit #{edge.toAuditId}</strong>
+                    </div>
+
+                    <div className="provenance-evidence">
+                      <h4>Audit-event evidence · does not verify the relationship</h4>
+                      <div className="provenance-evidence-columns">
+                        {([
+                          {
+                            label: "Source",
+                            auditId: edge.fromAuditId,
+                            operation: edge.fromOperation,
+                            schemaName: edge.fromSchemaName,
+                            tableName: edge.fromTableName,
+                            timestamp: edge.fromEventTimestamp,
+                            changedFields: edge.fromChangedFieldNames,
+                            changedFieldCount: edge.fromChangedFieldCount,
+                            beforeState: edge.fromBeforeState,
+                            afterState: edge.fromAfterState,
+                          },
+                          {
+                            label: "Target",
+                            auditId: edge.toAuditId,
+                            operation: edge.toOperation,
+                            schemaName: edge.toSchemaName,
+                            tableName: edge.toTableName,
+                            timestamp: edge.toEventTimestamp,
+                            changedFields: edge.toChangedFieldNames,
+                            changedFieldCount: edge.toChangedFieldCount,
+                            beforeState: edge.toBeforeState,
+                            afterState: edge.toAfterState,
+                          },
+                        ]).map((event) => {
+                          const beforeState = sanitizeState(
+                            parseJsonState(event.beforeState)
+                          );
+                          const afterState = sanitizeState(
+                            parseJsonState(event.afterState)
+                          );
+
+                          return (
+                            <section
+                              className="provenance-evidence-event"
+                              key={`${event.label}-${event.auditId}`}
+                            >
+                              <h5>
+                                {event.label} · Audit #{event.auditId}
+                              </h5>
+                              <p>
+                                {event.operation} · {event.schemaName}.{event.tableName}
+                              </p>
+                              <p>
+                                {event.timestamp
+                                  ? formatTimestamp(event.timestamp)
+                                  : "Timestamp unavailable"}
+                              </p>
+                              {event.changedFields.length > 0 ? (
+                                <ul className="provenance-evidence-fields">
+                                  {event.changedFields.map((field) => (
+                                    <li key={field}>
+                                      <strong>{field}</strong>
+                                      <span>
+                                        Before: {formatValue(beforeState?.[field])}
+                                      </span>
+                                      <span>
+                                        After: {formatValue(afterState?.[field])}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p>
+                                  {event.changedFieldCount === null
+                                    ? "Changed-field summary unavailable."
+                                    : "No changed fields recorded."}
+                                </p>
+                              )}
+                            </section>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 ))}
                 </div>

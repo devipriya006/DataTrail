@@ -169,8 +169,14 @@ public void deleteProvenanceEdge(
                     .map(edge -> {
                         AuditLog from = edge.getFromAuditLog();
                         AuditLog to = edge.getToAuditLog();
-                        ChangedFields fromChanges = summarizeChangedFields(from);
-                        ChangedFields toChanges = summarizeChangedFields(to);
+                        AuditLogResponse fromSnapshot =
+                                auditLogService.toAuditLogResponse(from);
+                        AuditLogResponse toSnapshot =
+                                auditLogService.toAuditLogResponse(to);
+                        ChangedFields fromChanges =
+                                summarizeChangedFields(fromSnapshot);
+                        ChangedFields toChanges =
+                                summarizeChangedFields(toSnapshot);
 
                         return new ProvenanceTraceResponse(
                                 edge.getEdgeId(),
@@ -192,13 +198,24 @@ public void deleteProvenanceEdge(
                                                                 fromChanges.names(),
                                                                 fromChanges.count(),
                                                                 toChanges.names(),
-                                                                toChanges.count());
+                                                                toChanges.count(),
+                                                                fromSnapshot != null
+                                                                                ? fromSnapshot.beforeState()
+                                                                                : null,
+                                                                fromSnapshot != null
+                                                                                ? fromSnapshot.afterState()
+                                                                                : null,
+                                                                toSnapshot != null
+                                                                                ? toSnapshot.beforeState()
+                                                                                : null,
+                                                                toSnapshot != null
+                                                                                ? toSnapshot.afterState()
+                                                                                : null);
                     })
                     .toList();
         }
 
-        private ChangedFields summarizeChangedFields(AuditLog auditLog) {
-                AuditLogResponse sanitized = auditLogService.toAuditLogResponse(auditLog);
+        private ChangedFields summarizeChangedFields(AuditLogResponse sanitized) {
                 if (sanitized == null) {
                         return ChangedFields.unavailable();
                 }
