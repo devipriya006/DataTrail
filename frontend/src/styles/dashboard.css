@@ -784,6 +784,17 @@
   line-height: 1.4;
 }
 
+.provenance-suggestion {
+  border-style: dashed;
+  border-color: #6c653c;
+}
+
+.provenance-suggestion-label {
+  color: #eacb75;
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
 .provenance-evidence {
   grid-column: 1 / -1;
   padding-top: 12px;

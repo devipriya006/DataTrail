@@ -22,15 +22,18 @@ public class MonitoringConfigurationService {
     private final MonitoringConfigurationRepository monitoringConfigurationRepository;
     private final DatabaseConnectionService databaseConnectionService;
     private final AuditLogRepository auditLogRepository;
+    private final PostgresChangeCaptureInstaller captureInstaller;
 
     public MonitoringConfigurationService(
             MonitoringConfigurationRepository monitoringConfigurationRepository,
             DatabaseConnectionService databaseConnectionService,
-            AuditLogRepository auditLogRepository) {
+            AuditLogRepository auditLogRepository,
+            PostgresChangeCaptureInstaller captureInstaller) {
 
         this.monitoringConfigurationRepository = monitoringConfigurationRepository;
         this.databaseConnectionService = databaseConnectionService;
         this.auditLogRepository = auditLogRepository;
+        this.captureInstaller = captureInstaller;
     }
 
     @Transactional
@@ -77,7 +80,10 @@ public class MonitoringConfigurationService {
                         null));
 
         applyRequest(configuration, request);
-        return toResponse(monitoringConfigurationRepository.save(configuration));
+        MonitoringConfiguration saved =
+                monitoringConfigurationRepository.saveAndFlush(configuration);
+        captureInstaller.install(saved);
+        return toResponse(saved);
     }
 
     public List<MonitoringConfigurationResponse> getAllConfigurations(String ownerUsername) {
@@ -131,8 +137,16 @@ public class MonitoringConfigurationService {
                         HttpStatus.BAD_REQUEST,
                         "A monitoring configuration's table cannot be changed.");
                 }
+        validateUsableConnection(connection);
+        databaseConnectionService.requireTargetBaseTable(
+                connection,
+                configuration.getSchemaName(),
+                configuration.getTableName());
         applyRequest(configuration, request);
-        return toResponse(monitoringConfigurationRepository.save(configuration));
+        MonitoringConfiguration saved =
+                monitoringConfigurationRepository.saveAndFlush(configuration);
+        captureInstaller.install(saved);
+        return toResponse(saved);
     }
 
     @Transactional
@@ -143,6 +157,8 @@ public class MonitoringConfigurationService {
                     HttpStatus.CONFLICT,
                     "This configuration has audit history and cannot be deleted.");
         }
+        captureInstaller.uninstall(requireOwnedConfiguration(
+                id, projectId, ownerUsername));
         monitoringConfigurationRepository.deleteById(id);
     }
 

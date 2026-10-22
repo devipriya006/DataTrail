@@ -5,6 +5,7 @@ import com.datatrail.backend.service.ProvenanceEdgeService;
 import org.springframework.web.bind.annotation.*;
 
 import com.datatrail.backend.dto.ProvenanceTraceResponse;
+import com.datatrail.backend.dto.ProvenanceCandidateResponse;
 import java.security.Principal;
 
 import java.time.LocalDateTime;
@@ -107,6 +108,18 @@ public String deleteProvenanceEdge(
                 auditId,
                 principal.getName()
         );
+    }
+
+    @GetMapping("/project/{projectId}/audit/{auditId}/candidates")
+    public List<ProvenanceCandidateResponse> discoverCandidates(
+            @PathVariable Long projectId,
+            @PathVariable Long auditId,
+            Principal principal) {
+
+        return provenanceEdgeService.discoverCandidates(
+                projectId,
+                auditId,
+                principal.getName());
     }
 
 }

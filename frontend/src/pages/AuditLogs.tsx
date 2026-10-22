@@ -48,6 +48,12 @@ type ProvenanceTraceItem = {
   toAfterState: string | null;
 };
 
+type ProvenanceCandidate = {
+  fromAuditId: number;
+  toAuditId: number;
+  explanation: string;
+};
+
 type ProvenanceGraphNode = {
   auditId: number;
   operation: string;
@@ -246,8 +252,11 @@ function AuditLogs() {
     useState<number | null>(null);
   const [traceItems, setTraceItems] =
     useState<ProvenanceTraceItem[]>([]);
+  const [traceCandidates, setTraceCandidates] =
+    useState<ProvenanceCandidate[]>([]);
   const [traceLoading, setTraceLoading] = useState(false);
   const [traceError, setTraceError] = useState("");
+  const [traceCandidateError, setTraceCandidateError] = useState("");
   const tracePanelRef = useRef<HTMLElement | null>(null);
     const [edgeFromAuditId, setEdgeFromAuditId] = useState("");
   const [edgeToAuditId, setEdgeToAuditId] = useState("");
@@ -273,7 +282,9 @@ function AuditLogs() {
 
     setTraceAuditId(auditId);
     setTraceItems([]);
+    setTraceCandidates([]);
     setTraceError("");
+    setTraceCandidateError("");
     setTraceLoading(true);
 
     try {
@@ -304,6 +315,36 @@ function AuditLogs() {
 
       const data: ProvenanceTraceItem[] = await response.json();
       setTraceItems(data);
+
+      try {
+        const candidateResponse = await fetch(
+          `http://localhost:8080/provenance-edges/project/${projectId}/audit/${auditId}/candidates`,
+          {
+            headers: {
+              Authorization: `Bearer ${session.accessToken}`,
+            },
+          }
+        );
+
+        if (candidateResponse.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        if (!candidateResponse.ok) {
+          setTraceCandidateError(
+            "Unable to discover evidence-supported candidate connections."
+          );
+          return;
+        }
+
+        const candidates: ProvenanceCandidate[] =
+          await candidateResponse.json();
+        setTraceCandidates(candidates);
+      } catch {
+        setTraceCandidateError(
+          "Unable to load candidate connections."
+        );
+      }
     } catch {
       setTraceError("Unable to connect to DataTrail.");
     } finally {
@@ -601,7 +642,9 @@ function AuditLogs() {
   const closeTrace = () => {
     setTraceAuditId(null);
     setTraceItems([]);
+    setTraceCandidates([]);
     setTraceError("");
+    setTraceCandidateError("");
     setTraceLoading(false);
   };
 
@@ -1306,6 +1349,40 @@ function AuditLogs() {
             {traceLoading && <p>Loading provenance trace...</p>}
 
             {traceError && <p role="alert">{traceError}</p>}
+
+            {!traceLoading && !traceError && (
+              <section className="provenance-candidates">
+                <h3>Suggested connections · not saved</h3>
+                {traceCandidateError && (
+                  <p role="alert">{traceCandidateError}</p>
+                )}
+                {!traceCandidateError && traceCandidates.length === 0 && (
+                  <p>No primary-key-supported candidates were found.</p>
+                )}
+                {traceCandidates.map((candidate) => (
+                  <div
+                    className="provenance-flow provenance-suggestion"
+                    key={`${candidate.fromAuditId}-${candidate.toAuditId}`}
+                  >
+                    <strong className="provenance-edge-endpoint">
+                      Audit #{candidate.fromAuditId}
+                    </strong>
+                    <div className="provenance-edge-direction">
+                      <span className="provenance-suggestion-label">
+                        Suggested candidate · not saved
+                      </span>
+                      <span className="provenance-arrow" aria-hidden="true">
+                        →
+                      </span>
+                      <small>{candidate.explanation}</small>
+                    </div>
+                    <strong className="provenance-edge-endpoint">
+                      Audit #{candidate.toAuditId}
+                    </strong>
+                  </div>
+                ))}
+              </section>
+            )}
 
             {!traceLoading &&
               !traceError &&

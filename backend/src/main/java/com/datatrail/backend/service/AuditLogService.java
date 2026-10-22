@@ -1,6 +1,7 @@
 package com.datatrail.backend.service;
 
 import com.datatrail.backend.dto.AuditLogResponse;
+import com.datatrail.backend.dto.AuditEventIngestion;
 import com.datatrail.backend.entity.AuditLog;
 import com.datatrail.backend.entity.DatabaseConnection;
 import com.datatrail.backend.entity.MonitoringConfiguration;
@@ -14,6 +15,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.charset.StandardCharsets;
@@ -24,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -112,6 +115,153 @@ public class AuditLogService {
         );
 
         return auditLogRepository.save(auditLog);
+    }
+
+    @Transactional
+    public AuditLog ingestEvent(Long configId, AuditEventIngestion event) {
+        validateIngestionEvent(event);
+
+        MonitoringConfiguration configuration =
+                monitoringConfigurationRepository.findByIdForAuditIngestion(configId)
+                        .orElseThrow(() -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Monitoring configuration not found."));
+        String operation = event.operation().trim().toUpperCase(Locale.ROOT);
+        validateEventFieldLengths(event);
+
+        AuditLog existing = auditLogRepository
+                .findByConfigurationConfigIdAndSourceEventId(
+                        configId,
+                        event.sourceEventId())
+                .orElse(null);
+        if (existing != null) {
+            if (!sameEvent(existing, event, operation)) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "The source event ID has already been ingested with different event data.");
+            }
+            return existing;
+        }
+
+        validateSnapshots(event, operation);
+        List<AuditLog> chain = auditLogRepository.findByConfigurationConfigId(configId)
+                .stream()
+                .sorted(Comparator.comparing(
+                        AuditLog::getChainSequence,
+                        Comparator.nullsLast(Long::compareTo)))
+                .toList();
+        String previousHash = null;
+        long sequence = 1L;
+        for (AuditLog previous : chain) {
+            if (previous.getChainSequence() == null
+                    || previous.getChainSequence() < 1
+                    || !Objects.equals(previous.getPrevHash(), previousHash)
+                    || !Objects.equals(previous.getLogHash(), computeHash(previous, previousHash))) {
+                throw new ResponseStatusException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "The existing audit hash chain is invalid; the event was not ingested.");
+            }
+            if (previous.getChainSequence() == Long.MAX_VALUE) {
+                throw new ResponseStatusException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "The audit chain has reached its maximum sequence.");
+            }
+            sequence = previous.getChainSequence() + 1;
+            previousHash = previous.getLogHash();
+        }
+
+        AuditLog auditLog = new AuditLog(
+                configuration,
+                operation,
+                event.transactionId(),
+                event.beforeState(),
+                event.afterState(),
+                event.changedBy(),
+                event.databaseUser(),
+                event.actorSource(),
+                event.eventTimestamp(),
+                null,
+                previousHash,
+                sequence);
+        auditLog.setSourceEventId(event.sourceEventId());
+        auditLog.setLogHash(computeHash(auditLog, previousHash));
+
+        return auditLogRepository.saveAndFlush(auditLog);
+    }
+
+    private void validateIngestionEvent(AuditEventIngestion event) {
+        if (event == null
+                || event.sourceEventId() == null
+                || event.sourceEventId().isBlank()
+                || event.operation() == null
+                || event.eventTimestamp() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Source event ID, operation, and event timestamp are required.");
+        }
+        String operation = event.operation().trim().toUpperCase(Locale.ROOT);
+        if (!Set.of("INSERT", "UPDATE", "DELETE").contains(operation)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Audit operation must be INSERT, UPDATE, or DELETE.");
+        }
+    }
+
+    private void validateEventFieldLengths(AuditEventIngestion event) {
+        requireMaxLength(event.sourceEventId(), 255, "Source event ID");
+        requireMaxLength(event.transactionId(), 100, "Transaction ID");
+        requireMaxLength(event.changedBy(), 100, "Changed by");
+        requireMaxLength(event.databaseUser(), 100, "Database user");
+        requireMaxLength(event.actorSource(), 30, "Actor source");
+    }
+
+    private void requireMaxLength(String value, int maxLength, String field) {
+        if (value != null && value.length() > maxLength) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    field + " exceeds the maximum length of " + maxLength + ".");
+        }
+    }
+
+    private void validateSnapshots(AuditEventIngestion event, String operation) {
+        boolean validShape = switch (operation) {
+            case "INSERT" -> event.beforeState() == null && event.afterState() != null;
+            case "UPDATE" -> event.beforeState() != null && event.afterState() != null;
+            case "DELETE" -> event.beforeState() != null && event.afterState() == null;
+            default -> false;
+        };
+        if (!validShape
+                || !isJsonObject(event.beforeState())
+                || !isJsonObject(event.afterState())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Audit snapshots do not match the event operation.");
+        }
+    }
+
+    private boolean isJsonObject(String state) {
+        if (state == null) {
+            return true;
+        }
+        try {
+            return objectMapper.readTree(state).isObject();
+        } catch (JsonProcessingException exception) {
+            return false;
+        }
+    }
+
+    private boolean sameEvent(
+            AuditLog existing,
+            AuditEventIngestion event,
+            String normalizedOperation) {
+        return Objects.equals(existing.getOperation(), normalizedOperation)
+                && Objects.equals(existing.getTransactionId(), event.transactionId())
+                && Objects.equals(existing.getBeforeState(), event.beforeState())
+                && Objects.equals(existing.getAfterState(), event.afterState())
+                && Objects.equals(existing.getChangedBy(), event.changedBy())
+                && Objects.equals(existing.getDatabaseUser(), event.databaseUser())
+                && Objects.equals(existing.getActorSource(), event.actorSource())
+                && Objects.equals(existing.getEventTimestamp(), event.eventTimestamp());
     }
 
     public List<AuditLogResponse> getAllAuditLogsForOwner(
