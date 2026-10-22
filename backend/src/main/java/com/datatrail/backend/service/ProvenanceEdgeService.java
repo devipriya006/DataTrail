@@ -2,7 +2,9 @@ package com.datatrail.backend.service;
 
 import com.datatrail.backend.dto.ProvenanceTraceResponse;
 import com.datatrail.backend.dto.AuditLogResponse;
+import com.datatrail.backend.dto.ProvenanceCandidateResponse;
 import com.datatrail.backend.entity.AuditLog;
+import com.datatrail.backend.entity.DatabaseConnection;
 import com.datatrail.backend.entity.ProvenanceEdge;
 import com.datatrail.backend.repository.AuditLogRepository;
 import com.datatrail.backend.repository.ProvenanceEdgeRepository;
@@ -13,9 +15,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeSet;
 @Service
 public class ProvenanceEdgeService {
@@ -23,16 +34,19 @@ public class ProvenanceEdgeService {
     private final ProvenanceEdgeRepository provenanceEdgeRepository;
     private final AuditLogRepository auditLogRepository;
     private final AuditLogService auditLogService;
+    private final DatabaseConnectionService databaseConnectionService;
         private final ObjectMapper objectMapper = new ObjectMapper();
 
     public ProvenanceEdgeService(
             ProvenanceEdgeRepository provenanceEdgeRepository,
             AuditLogRepository auditLogRepository,
-            AuditLogService auditLogService) {
+            AuditLogService auditLogService,
+            DatabaseConnectionService databaseConnectionService) {
 
         this.provenanceEdgeRepository = provenanceEdgeRepository;
         this.auditLogRepository = auditLogRepository;
         this.auditLogService = auditLogService;
+        this.databaseConnectionService = databaseConnectionService;
     }
 
     public ProvenanceEdge createProvenanceEdge(
@@ -169,8 +183,14 @@ public void deleteProvenanceEdge(
                     .map(edge -> {
                         AuditLog from = edge.getFromAuditLog();
                         AuditLog to = edge.getToAuditLog();
-                        ChangedFields fromChanges = summarizeChangedFields(from);
-                        ChangedFields toChanges = summarizeChangedFields(to);
+                        AuditLogResponse fromSnapshot =
+                                auditLogService.toAuditLogResponse(from);
+                        AuditLogResponse toSnapshot =
+                                auditLogService.toAuditLogResponse(to);
+                        ChangedFields fromChanges =
+                                summarizeChangedFields(fromSnapshot);
+                        ChangedFields toChanges =
+                                summarizeChangedFields(toSnapshot);
 
                         return new ProvenanceTraceResponse(
                                 edge.getEdgeId(),
@@ -192,13 +212,196 @@ public void deleteProvenanceEdge(
                                                                 fromChanges.names(),
                                                                 fromChanges.count(),
                                                                 toChanges.names(),
-                                                                toChanges.count());
+                                                                toChanges.count(),
+                                                                fromSnapshot != null
+                                                                                ? fromSnapshot.beforeState()
+                                                                                : null,
+                                                                fromSnapshot != null
+                                                                                ? fromSnapshot.afterState()
+                                                                                : null,
+                                                                toSnapshot != null
+                                                                                ? toSnapshot.beforeState()
+                                                                                : null,
+                                                                toSnapshot != null
+                                                                                ? toSnapshot.afterState()
+                                                                                : null);
                     })
                     .toList();
         }
 
-        private ChangedFields summarizeChangedFields(AuditLog auditLog) {
-                AuditLogResponse sanitized = auditLogService.toAuditLogResponse(auditLog);
+        public List<ProvenanceCandidateResponse> discoverCandidates(
+                Long projectId,
+                Long auditId,
+                String ownerUsername) {
+
+            auditLogService.requireProjectAccess(projectId, ownerUsername);
+            AuditLog selectedAudit = auditLogRepository.findById(auditId)
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND, "Audit log not found."));
+
+            DatabaseConnection connection = selectedAudit.getConfiguration()
+                    .getConnection();
+            if (connection == null || connection.getProject() == null
+                    || !projectId.equals(connection.getProject().getProjectId())) {
+                throw new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Audit log not found in this project.");
+            }
+            if (!"PostgreSQL".equalsIgnoreCase(connection.getDbType())) {
+                throw new ResponseStatusException(
+                        HttpStatus.NOT_IMPLEMENTED,
+                        "Provenance candidate discovery currently supports PostgreSQL only.");
+            }
+            if (connection.getConnectionId() == null
+                    || !"CONNECTED".equalsIgnoreCase(connection.getConnectionStatus())) {
+                throw new ResponseStatusException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "Test the saved database connection before discovering candidates.");
+            }
+
+            String schemaName = selectedAudit.getConfiguration().getSchemaName();
+            String tableName = selectedAudit.getConfiguration().getTableName();
+            if (schemaName == null || schemaName.isBlank()
+                    || tableName == null || tableName.isBlank()) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Audit event schema and table metadata are unavailable.");
+            }
+
+            List<String> primaryKeyColumns;
+            try (Connection target =
+                         databaseConnectionService.openTargetConnection(connection)) {
+                primaryKeyColumns = loadPrimaryKeyColumns(
+                        target.getMetaData(),
+                        target.getCatalog(),
+                        schemaName,
+                        tableName);
+            } catch (SQLException exception) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_GATEWAY,
+                        "Unable to discover primary-key metadata for provenance candidates.");
+            }
+            if (primaryKeyColumns.isEmpty()) {
+                return List.of();
+            }
+
+            Map<String, JsonNode> selectedIdentity =
+                    readPrimaryKeyIdentity(selectedAudit, primaryKeyColumns);
+            if (selectedIdentity == null) {
+                return List.of();
+            }
+
+            Set<AuditPair> recordedPairs = new HashSet<>();
+            for (ProvenanceEdge edge : provenanceEdgeRepository.findAllForProject(projectId)) {
+                recordedPairs.add(new AuditPair(
+                        edge.getFromAuditLog().getAuditId(),
+                        edge.getToAuditLog().getAuditId()));
+            }
+
+            List<AuditLog> sameTableEvents =
+                    auditLogRepository.findForProvenanceCandidates(
+                            projectId,
+                            connection.getConnectionId(),
+                            schemaName,
+                            tableName);
+
+            List<ProvenanceCandidateResponse> candidates = new ArrayList<>();
+            Set<AuditPair> suggestedPairs = new HashSet<>();
+            Comparator<AuditLog> chronological = Comparator
+                    .comparing(AuditLog::getEventTimestamp)
+                    .thenComparing(AuditLog::getAuditId);
+
+            for (AuditLog event : sameTableEvents) {
+                if (event.getAuditId().equals(auditId)) {
+                    continue;
+                }
+                Map<String, JsonNode> eventIdentity =
+                        readPrimaryKeyIdentity(event, primaryKeyColumns);
+                if (eventIdentity == null || !selectedIdentity.equals(eventIdentity)) {
+                    continue;
+                }
+
+                AuditLog from = chronological.compare(event, selectedAudit) < 0
+                        ? event : selectedAudit;
+                AuditLog to = from == event ? selectedAudit : event;
+                AuditPair pair = new AuditPair(from.getAuditId(), to.getAuditId());
+                AuditPair reversePair = new AuditPair(to.getAuditId(), from.getAuditId());
+                if (recordedPairs.contains(pair) || recordedPairs.contains(reversePair)
+                        || !suggestedPairs.add(pair)) {
+                    continue;
+                }
+
+                candidates.add(new ProvenanceCandidateResponse(
+                        pair.fromAuditId(),
+                        pair.toAuditId(),
+                        "Same record identity in " + schemaName + "." + tableName
+                                + " by primary-key column(s) "
+                                + String.join(", ", primaryKeyColumns)
+                                + "; this suggests record continuity, not causation."));
+            }
+
+            return candidates;
+        }
+
+        private List<String> loadPrimaryKeyColumns(
+                DatabaseMetaData metadata,
+                String catalog,
+                String schema,
+                String table) throws SQLException {
+            List<PrimaryKeyColumn> keys = new ArrayList<>();
+            try (ResultSet result = metadata.getPrimaryKeys(catalog, schema, table)) {
+                while (result.next()) {
+                    keys.add(new PrimaryKeyColumn(
+                            result.getShort("KEY_SEQ"),
+                            result.getString("COLUMN_NAME")));
+                }
+            }
+            return keys.stream()
+                    .sorted(Comparator.comparingInt(PrimaryKeyColumn::sequence))
+                    .map(PrimaryKeyColumn::name)
+                    .toList();
+        }
+
+        private Map<String, JsonNode> readPrimaryKeyIdentity(
+                AuditLog auditLog,
+                List<String> primaryKeyColumns) {
+            AuditLogResponse snapshot = auditLogService.toAuditLogResponse(auditLog);
+            if (snapshot == null) {
+                return null;
+            }
+
+            Optional<JsonNode> before = parseSnapshot(snapshot.beforeState());
+            Optional<JsonNode> after = parseSnapshot(snapshot.afterState());
+            if (before.isEmpty() || after.isEmpty()) {
+                return null;
+            }
+
+            Map<String, JsonNode> identity = new java.util.LinkedHashMap<>();
+            for (String column : primaryKeyColumns) {
+                JsonNode beforeValue = before.get().get(column);
+                JsonNode afterValue = after.get().get(column);
+                if (beforeValue != null && !beforeValue.isNull()
+                        && afterValue != null && !afterValue.isNull()
+                        && !beforeValue.equals(afterValue)) {
+                    return null;
+                }
+
+                JsonNode value = afterValue != null && !afterValue.isNull()
+                        ? afterValue : beforeValue;
+                if (value == null || value.isNull() || !value.isValueNode()) {
+                    return null;
+                }
+                identity.put(column, value);
+            }
+            return identity;
+        }
+
+        private record PrimaryKeyColumn(short sequence, String name) {
+        }
+
+        private record AuditPair(Long fromAuditId, Long toAuditId) {
+        }
+
+        private ChangedFields summarizeChangedFields(AuditLogResponse sanitized) {
                 if (sanitized == null) {
                         return ChangedFields.unavailable();
                 }

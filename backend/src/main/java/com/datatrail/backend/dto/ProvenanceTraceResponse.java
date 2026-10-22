@@ -24,6 +24,10 @@ public record ProvenanceTraceResponse(
         List<String> fromChangedFieldNames,
         Integer fromChangedFieldCount,
         List<String> toChangedFieldNames,
-        Integer toChangedFieldCount
+        Integer toChangedFieldCount,
+        String fromBeforeState,
+        String fromAfterState,
+        String toBeforeState,
+        String toAfterState
 ) {
 }

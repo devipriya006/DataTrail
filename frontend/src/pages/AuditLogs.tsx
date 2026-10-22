@@ -36,12 +36,22 @@ type ProvenanceTraceItem = {
   fromEventTimestamp: string | null;
   fromChangedFieldNames: string[];
   fromChangedFieldCount: number | null;
+  fromBeforeState: string | null;
+  fromAfterState: string | null;
   toOperation: string;
   toSchemaName: string;
   toTableName: string;
   toEventTimestamp: string | null;
   toChangedFieldNames: string[];
   toChangedFieldCount: number | null;
+  toBeforeState: string | null;
+  toAfterState: string | null;
+};
+
+type ProvenanceCandidate = {
+  fromAuditId: number;
+  toAuditId: number;
+  explanation: string;
 };
 
 type ProvenanceGraphNode = {
@@ -242,8 +252,11 @@ function AuditLogs() {
     useState<number | null>(null);
   const [traceItems, setTraceItems] =
     useState<ProvenanceTraceItem[]>([]);
+  const [traceCandidates, setTraceCandidates] =
+    useState<ProvenanceCandidate[]>([]);
   const [traceLoading, setTraceLoading] = useState(false);
   const [traceError, setTraceError] = useState("");
+  const [traceCandidateError, setTraceCandidateError] = useState("");
   const tracePanelRef = useRef<HTMLElement | null>(null);
     const [edgeFromAuditId, setEdgeFromAuditId] = useState("");
   const [edgeToAuditId, setEdgeToAuditId] = useState("");
@@ -269,7 +282,9 @@ function AuditLogs() {
 
     setTraceAuditId(auditId);
     setTraceItems([]);
+    setTraceCandidates([]);
     setTraceError("");
+    setTraceCandidateError("");
     setTraceLoading(true);
 
     try {
@@ -300,6 +315,36 @@ function AuditLogs() {
 
       const data: ProvenanceTraceItem[] = await response.json();
       setTraceItems(data);
+
+      try {
+        const candidateResponse = await fetch(
+          `http://localhost:8080/provenance-edges/project/${projectId}/audit/${auditId}/candidates`,
+          {
+            headers: {
+              Authorization: `Bearer ${session.accessToken}`,
+            },
+          }
+        );
+
+        if (candidateResponse.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        if (!candidateResponse.ok) {
+          setTraceCandidateError(
+            "Unable to discover evidence-supported candidate connections."
+          );
+          return;
+        }
+
+        const candidates: ProvenanceCandidate[] =
+          await candidateResponse.json();
+        setTraceCandidates(candidates);
+      } catch {
+        setTraceCandidateError(
+          "Unable to load candidate connections."
+        );
+      }
     } catch {
       setTraceError("Unable to connect to DataTrail.");
     } finally {
@@ -597,7 +642,9 @@ function AuditLogs() {
   const closeTrace = () => {
     setTraceAuditId(null);
     setTraceItems([]);
+    setTraceCandidates([]);
     setTraceError("");
+    setTraceCandidateError("");
     setTraceLoading(false);
   };
 
@@ -1303,6 +1350,40 @@ function AuditLogs() {
 
             {traceError && <p role="alert">{traceError}</p>}
 
+            {!traceLoading && !traceError && (
+              <section className="provenance-candidates">
+                <h3>Suggested connections · not saved</h3>
+                {traceCandidateError && (
+                  <p role="alert">{traceCandidateError}</p>
+                )}
+                {!traceCandidateError && traceCandidates.length === 0 && (
+                  <p>No primary-key-supported candidates were found.</p>
+                )}
+                {traceCandidates.map((candidate) => (
+                  <div
+                    className="provenance-flow provenance-suggestion"
+                    key={`${candidate.fromAuditId}-${candidate.toAuditId}`}
+                  >
+                    <strong className="provenance-edge-endpoint">
+                      Audit #{candidate.fromAuditId}
+                    </strong>
+                    <div className="provenance-edge-direction">
+                      <span className="provenance-suggestion-label">
+                        Suggested candidate · not saved
+                      </span>
+                      <span className="provenance-arrow" aria-hidden="true">
+                        →
+                      </span>
+                      <small>{candidate.explanation}</small>
+                    </div>
+                    <strong className="provenance-edge-endpoint">
+                      Audit #{candidate.toAuditId}
+                    </strong>
+                  </div>
+                ))}
+              </section>
+            )}
+
             {!traceLoading &&
               !traceError &&
               traceItems.length === 0 && (
@@ -1349,22 +1430,22 @@ function AuditLogs() {
                 <div className="provenance-graph-edges">
                 {traceItems.map((edge) => (
                   <div className="provenance-flow" key={edge.edgeId}>
-                    <strong className="provenance-edge-endpoint">
-                      Audit #{edge.fromAuditId}
-                    </strong>
+                    <div className="provenance-edge-endpoint">
+                      <small>Source</small>
+                      <strong>Audit #{edge.fromAuditId}</strong>
+                    </div>
 
                     <div className="provenance-edge-direction">
                       <span className="provenance-recorded-label">
-                        User-recorded relationship
+                        Recorded relationship · not independently verified
                       </span>
-                      <small>Not independently verified</small>
                       <strong>{edge.relationshipType}</strong>
                       <span className="provenance-arrow" aria-hidden="true">
                         →
                       </span>
                       {edge.inferenceMethod && (
                         <small>
-                          User description: {edge.inferenceMethod}
+                          User-provided description: {edge.inferenceMethod}
                         </small>
                       )}
                       {edge.edgeWeight !== null && (
@@ -1380,9 +1461,89 @@ function AuditLogs() {
                       )}
                     </div>
 
-                    <strong className="provenance-edge-endpoint">
-                      Audit #{edge.toAuditId}
-                    </strong>
+                    <div className="provenance-edge-endpoint">
+                      <small>Target</small>
+                      <strong>Audit #{edge.toAuditId}</strong>
+                    </div>
+
+                    <div className="provenance-evidence">
+                      <h4>Audit-event evidence · does not verify the relationship</h4>
+                      <div className="provenance-evidence-columns">
+                        {([
+                          {
+                            label: "Source",
+                            auditId: edge.fromAuditId,
+                            operation: edge.fromOperation,
+                            schemaName: edge.fromSchemaName,
+                            tableName: edge.fromTableName,
+                            timestamp: edge.fromEventTimestamp,
+                            changedFields: edge.fromChangedFieldNames,
+                            changedFieldCount: edge.fromChangedFieldCount,
+                            beforeState: edge.fromBeforeState,
+                            afterState: edge.fromAfterState,
+                          },
+                          {
+                            label: "Target",
+                            auditId: edge.toAuditId,
+                            operation: edge.toOperation,
+                            schemaName: edge.toSchemaName,
+                            tableName: edge.toTableName,
+                            timestamp: edge.toEventTimestamp,
+                            changedFields: edge.toChangedFieldNames,
+                            changedFieldCount: edge.toChangedFieldCount,
+                            beforeState: edge.toBeforeState,
+                            afterState: edge.toAfterState,
+                          },
+                        ]).map((event) => {
+                          const beforeState = sanitizeState(
+                            parseJsonState(event.beforeState)
+                          );
+                          const afterState = sanitizeState(
+                            parseJsonState(event.afterState)
+                          );
+
+                          return (
+                            <section
+                              className="provenance-evidence-event"
+                              key={`${event.label}-${event.auditId}`}
+                            >
+                              <h5>
+                                {event.label} · Audit #{event.auditId}
+                              </h5>
+                              <p>
+                                {event.operation} · {event.schemaName}.{event.tableName}
+                              </p>
+                              <p>
+                                {event.timestamp
+                                  ? formatTimestamp(event.timestamp)
+                                  : "Timestamp unavailable"}
+                              </p>
+                              {event.changedFields.length > 0 ? (
+                                <ul className="provenance-evidence-fields">
+                                  {event.changedFields.map((field) => (
+                                    <li key={field}>
+                                      <strong>{field}</strong>
+                                      <span>
+                                        Before: {formatValue(beforeState?.[field])}
+                                      </span>
+                                      <span>
+                                        After: {formatValue(afterState?.[field])}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p>
+                                  {event.changedFieldCount === null
+                                    ? "Changed-field summary unavailable."
+                                    : "No changed fields recorded."}
+                                </p>
+                              )}
+                            </section>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 ))}
                 </div>

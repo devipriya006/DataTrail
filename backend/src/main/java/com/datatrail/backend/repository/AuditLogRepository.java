@@ -17,9 +17,27 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
 
     List<AuditLog> findByConfigurationConfigId(Long configId);
 
+    java.util.Optional<AuditLog> findByConfigurationConfigIdAndSourceEventId(
+            Long configId,
+            String sourceEventId);
+
     List<AuditLog> findByConfigurationConnectionConnectionId(Long connectionId);
 
     List<AuditLog> findByConfigurationConnectionProjectProjectId(Long projectId);
+
+    @Query("""
+            SELECT log
+            FROM AuditLog log
+            WHERE log.configuration.connection.project.projectId = :projectId
+              AND log.configuration.connection.connectionId = :connectionId
+              AND log.configuration.schemaName = :schemaName
+              AND log.configuration.tableName = :tableName
+            """)
+    List<AuditLog> findForProvenanceCandidates(
+            @Param("projectId") Long projectId,
+            @Param("connectionId") Long connectionId,
+            @Param("schemaName") String schemaName,
+            @Param("tableName") String tableName);
 
     List<AuditLog> findByConfigurationConnectionProjectOwnerUsername(String ownerUsername);
 

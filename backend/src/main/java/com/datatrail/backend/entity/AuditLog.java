@@ -4,7 +4,11 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "audit_logs")
+@Table(
+        name = "audit_logs",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_audit_logs_config_source_event",
+                columnNames = {"config_id", "source_event_id"}))
 public class AuditLog {
 
     @Id
@@ -47,6 +51,9 @@ public class AuditLog {
 
     @Column(name = "actor_source", length = 30)
     private String actorSource;
+
+    @Column(name = "source_event_id", length = 255)
+    private String sourceEventId;
 
     protected AuditLog() {
     }
@@ -206,6 +213,14 @@ public String getActorSource() {
 
 public void setActorSource(String actorSource) {
     this.actorSource = actorSource;
+}
+
+public String getSourceEventId() {
+    return sourceEventId;
+}
+
+public void setSourceEventId(String sourceEventId) {
+    this.sourceEventId = sourceEventId;
 }
 
 }
