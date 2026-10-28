@@ -75,107 +75,102 @@ function Dashboard() {
     const loadCounts = async () => {
       setLoadingCounts(true);
       setCountError("");
+      const unavailableCounts: string[] = [];
 
-      try {
-        const projects = await fetchArray<Project>("/projects", accessToken);
-        if (cancelled) return;
-        setProjectCount(projects.length);
-
-        const [connectionResults, auditResults] = await Promise.all([
-          Promise.all(
-            projects.map(async (project) => {
-              try {
-                const connections = await fetchArray<Omit<DatabaseConnection, "projectId">>(
-                  `/database-connections/project/${project.projectId}`,
-                  accessToken,
-                );
-                return {
-                  ok: true,
-                  connections: connections.map((connection) => ({
-                    ...connection,
-                    projectId: project.projectId,
-                  })),
-                };
-              } catch {
-                return { ok: false, connections: [] as DatabaseConnection[] };
-              }
-            }),
-          ),
-          Promise.all(
-            projects.map(async (project) => {
-              try {
-                const events = await fetchArray<AuditEvent>(
-                  `/audit-logs/project/${project.projectId}`,
-                  accessToken,
-                );
-                return { ok: true, events };
-              } catch {
-                return { ok: false, events: [] as AuditEvent[] };
-              }
-            }),
-          ),
+      // These two endpoints return the signed-in user's records directly.
+      // This avoids failures from querying monitoring/audit data separately
+      // through every project or connection.
+      const [projectsResult, monitoringResult, auditResult] =
+        await Promise.allSettled([
+          fetchArray<Project>("/projects", accessToken),
+          fetchArray<MonitoringConfiguration>("/monitoring-configurations", accessToken),
+          fetchArray<AuditEvent>("/audit-logs", accessToken),
         ]);
 
-        if (cancelled) return;
+      if (cancelled) return;
 
-        const allConnections = connectionResults.flatMap((result) => result.connections);
-        const connectionsLoaded = connectionResults.every((result) => result.ok);
-        setConnectionCount(connectionsLoaded ? allConnections.length : null);
+      let projects: Project[] = [];
+      if (projectsResult.status === "fulfilled") {
+        projects = projectsResult.value;
+        setProjectCount(projects.length);
+      } else {
+        setProjectCount(null);
+        unavailableCounts.push("projects");
+      }
 
-        const monitoringResults = await Promise.all(
-          allConnections.map(async (connection) => {
+      if (projectsResult.status === "fulfilled") {
+        const connectionResults = await Promise.all(
+          projects.map(async (project) => {
             try {
-              const configurations = await fetchArray<MonitoringConfiguration>(
-                `/monitoring-configurations/connection/${connection.connectionId}?projectId=${connection.projectId}`,
+              const connections = await fetchArray<Omit<DatabaseConnection, "projectId">>(
+                `/database-connections/project/${project.projectId}`,
                 accessToken,
               );
-              return { ok: true, configurations };
+              return {
+                ok: true,
+                connections: connections.map((connection) => ({
+                  ...connection,
+                  projectId: project.projectId,
+                })),
+              };
             } catch {
-              return { ok: false, configurations: [] as MonitoringConfiguration[] };
+              return { ok: false, connections: [] as DatabaseConnection[] };
             }
           }),
         );
 
         if (cancelled) return;
 
-        const monitoringLoaded = connectionsLoaded && monitoringResults.every((result) => result.ok);
-        const allConfigurations = monitoringResults.flatMap((result) => result.configurations);
+        const allConnections = connectionResults.flatMap((result) => result.connections);
+        const connectionsLoaded = connectionResults.every((result) => result.ok);
+        setConnectionCount(connectionsLoaded ? allConnections.length : null);
+        if (!connectionsLoaded) unavailableCounts.push("database connections");
+      } else {
+        setConnectionCount(null);
+      }
+
+      if (monitoringResult.status === "fulfilled") {
         const enabledTableKeys = new Set(
-          allConfigurations
+          monitoringResult.value
             .filter((configuration) => configuration.monitoringEnabled === true)
             .map((configuration) =>
-              `${configuration.connectionId}:${configuration.schemaName ?? ""}.${configuration.tableName ?? configuration.configId}`,
+              `${configuration.connectionId}:${configuration.schemaName ?? ""}.${configuration.tableName ?? `config-${configuration.configId}`}`,
             ),
         );
-        setMonitoredTableCount(monitoringLoaded ? enabledTableKeys.size : null);
-
-        const auditLoaded = auditResults.every((result) => result.ok);
-        const allAuditEvents = auditResults.flatMap((result) => result.events);
-        setAuditEventCount(auditLoaded ? allAuditEvents.length : null);
-
-        const unavailableCounts: string[] = [];
-        if (!connectionsLoaded) unavailableCounts.push("database connections");
-        if (!monitoringLoaded) unavailableCounts.push("monitored tables");
-        if (!auditLoaded) unavailableCounts.push("audit events");
-        if (unavailableCounts.length > 0) {
-          setCountError(
-            `Could not load ${unavailableCounts.join(", ")} completely. A dash means the count is unavailable, not zero.`,
-          );
-        }
-      } catch {
-        if (!cancelled) {
-          setProjectCount(null);
-          setConnectionCount(null);
-          setMonitoredTableCount(null);
-          setAuditEventCount(null);
-          setCountError("Dashboard counts could not be loaded. Check that the backend is running and you are signed in.");
-        }
-      } finally {
-        if (!cancelled) setLoadingCounts(false);
+        setMonitoredTableCount(enabledTableKeys.size);
+      } else {
+        setMonitoredTableCount(null);
+        unavailableCounts.push("monitored tables");
       }
+
+      if (auditResult.status === "fulfilled") {
+        setAuditEventCount(auditResult.value.length);
+      } else {
+        setAuditEventCount(null);
+        unavailableCounts.push("audit events");
+      }
+
+      if (!cancelled && unavailableCounts.length > 0) {
+        setCountError(
+          `Could not load ${unavailableCounts.join(", ")} completely. A dash means the count is unavailable, not zero.`,
+        );
+      }
+
+      if (!cancelled) setLoadingCounts(false);
     };
 
-    void loadCounts();
+    void loadCounts().catch(() => {
+      if (!cancelled) {
+        setProjectCount(null);
+        setConnectionCount(null);
+        setMonitoredTableCount(null);
+        setAuditEventCount(null);
+        setCountError(
+          "Dashboard counts could not be loaded. Check that the backend is running and you are signed in.",
+        );
+        setLoadingCounts(false);
+      }
+    });
 
     return () => {
       cancelled = true;
