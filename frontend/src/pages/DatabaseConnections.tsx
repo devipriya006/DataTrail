@@ -1191,54 +1191,6 @@ function DatabaseConnections() {
           </>
         )}
 
-        {/* NEXT STEP */}
-
-        <section className="dashboard-panel">
-
-          <div className="panel-header">
-
-            <div>
-
-              <p className="section-label">
-                NEXT STEP
-              </p>
-
-              <h3>
-                Table discovery
-              </h3>
-
-            </div>
-
-          </div>
-
-          <div className="activity-item">
-
-            <div className="activity-marker">
-              NEXT
-            </div>
-
-            <div className="activity-details">
-
-              <strong>
-                Discover database schemas and tables
-              </strong>
-
-              <p>
-                Once a database is connected, TraceDB will
-                discover available schemas and tables so you
-                can choose what to monitor.
-              </p>
-
-            </div>
-
-            <span className="activity-time">
-              AFTER CONNECTION
-            </span>
-
-          </div>
-
-        </section>
-
         {/* FOOTER */}
 
         <footer className="dashboard-footer">
