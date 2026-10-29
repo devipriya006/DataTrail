@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { clearSession, getSession } from "../auth";
@@ -289,7 +290,7 @@ function AuditLogs() {
 
     try {
       const response = await fetch(
-        `http://localhost:8080/provenance-edges/project/${projectId}/audit/${auditId}/trace`,
+        `${API_BASE_URL}/provenance-edges/project/${projectId}/audit/${auditId}/trace`,
         {
           headers: {
             Authorization: `Bearer ${session.accessToken}`,
@@ -318,7 +319,7 @@ function AuditLogs() {
 
       try {
         const candidateResponse = await fetch(
-          `http://localhost:8080/provenance-edges/project/${projectId}/audit/${auditId}/candidates`,
+          `${API_BASE_URL}/provenance-edges/project/${projectId}/audit/${auditId}/candidates`,
           {
             headers: {
               Authorization: `Bearer ${session.accessToken}`,
@@ -382,7 +383,7 @@ function AuditLogs() {
 
     try {
       const response = await fetch(
-        `http://localhost:8080/provenance-edges/project/${projectId}`,
+        `${API_BASE_URL}/provenance-edges/project/${projectId}`,
         {
           method: "POST",
           headers: {
@@ -469,7 +470,7 @@ function AuditLogs() {
         const queryString = params.toString();
 
         const response = await fetch(
-          `http://localhost:8080/audit-logs/project/${projectId}${
+          `${API_BASE_URL}/audit-logs/project/${projectId}${
             queryString ? `?${queryString}` : ""
           }`,
           {
@@ -698,7 +699,7 @@ function AuditLogs() {
             className="nav-item"
             onClick={() => navigate("/dashboard")}
           >
-            <span>⌂</span>
+            <span></span>
             Dashboard
           </button>
 
@@ -706,7 +707,7 @@ function AuditLogs() {
             className="nav-item"
             onClick={() => navigate("/projects")}
           >
-            <span>▣</span>
+            <span></span>
             Projects
           </button>
 
@@ -714,7 +715,7 @@ function AuditLogs() {
             className="nav-item"
             onClick={() => navigate(`/projects/${projectId}`)}
           >
-            <span>⌂</span>
+            <span></span>
             Overview
           </button>
 
@@ -724,7 +725,7 @@ function AuditLogs() {
               navigate(`/projects/${projectId}/connections`)
             }
           >
-            <span>◉</span>
+            <span></span>
             Database
           </button>
 
@@ -734,7 +735,7 @@ function AuditLogs() {
               navigate(`/projects/${projectId}/audit-logs`)
             }
           >
-            <span>⌁</span>
+            <span></span>
             Audit Logs
           </button>
         </nav>
@@ -780,7 +781,7 @@ function AuditLogs() {
             className="new-project-button"
             onClick={() => navigate(`/projects/${projectId}`)}
           >
-            ← Back to project
+             Back to project
           </button>
         </section>
 
@@ -1569,3 +1570,4 @@ function AuditLogs() {
 }
 
 export default AuditLogs;
+

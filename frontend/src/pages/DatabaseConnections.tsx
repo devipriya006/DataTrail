@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -96,7 +97,7 @@ function DatabaseConnections() {
       setError("");
 
       const response = await fetch(
-        `http://localhost:8080/database-connections/project/${projectId}`,
+        `${API_BASE_URL}/database-connections/project/${projectId}`,
         {
           headers: {
             Authorization: `Bearer ${session.accessToken}`,
@@ -151,7 +152,7 @@ function DatabaseConnections() {
 
     try {
       const response = await fetch(
-        "http://localhost:8080/database-connections",
+        `${API_BASE_URL}/database-connections`,
         {
           method: "POST",
           headers: {
@@ -246,7 +247,7 @@ function DatabaseConnections() {
     setDiscoveryError("");
     setDiscoveryNotice("");
     setDiscovering(true);
-    const requestUrl = `http://localhost:8080/database-connections/${connection.connectionId}/schemas?projectId=${projectId}`;
+    const requestUrl = `${API_BASE_URL}/database-connections/${connection.connectionId}/schemas?projectId=${projectId}`;
     console.info("Discover schemas request", {
       projectId,
       connectionId: connection.connectionId,
@@ -286,7 +287,7 @@ function DatabaseConnections() {
     setDiscoveryNotice("");
     setLoadingTables(true);
     const query = new URLSearchParams({ projectId, schemaName });
-    const requestUrl = `http://localhost:8080/database-connections/${activeDiscoveryConnectionId}/tables?${query}`;
+    const requestUrl = `${API_BASE_URL}/database-connections/${activeDiscoveryConnectionId}/tables?${query}`;
     console.info("Discover tables request", {
       projectId,
       connectionId: activeDiscoveryConnectionId,
@@ -359,7 +360,7 @@ function DatabaseConnections() {
     try {
       for (const tableName of selectedTables) {
         const draft = monitoringDrafts[tableName] ?? DEFAULT_MONITORING_DRAFT;
-        const response = await fetch("http://localhost:8080/monitoring-configurations", {
+        const response = await fetch(`${API_BASE_URL}/monitoring-configurations`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -410,7 +411,7 @@ function DatabaseConnections() {
 
     try {
       const response = await fetch(
-        `http://localhost:8080/database-connections/${connectionId}`,
+        `${API_BASE_URL}/database-connections/${connectionId}`,
         {
           method: "DELETE",
           headers: {
@@ -451,7 +452,7 @@ function DatabaseConnections() {
 
     try {
       const response = await fetch(
-        `http://localhost:8080/database-connections/${connection.connectionId}/test`,
+        `${API_BASE_URL}/database-connections/${connection.connectionId}/test`,
         {
           method: "POST",
           headers: {
@@ -531,7 +532,7 @@ function DatabaseConnections() {
             className="nav-item"
             onClick={() => navigate("/dashboard")}
           >
-            <span>⌂</span>
+            <span></span>
             Dashboard
           </div>
 
@@ -539,32 +540,32 @@ function DatabaseConnections() {
             className="nav-item active"
             onClick={() => navigate("/projects")}
           >
-            <span>▣</span>
+            <span></span>
             Projects
           </div>
 
           <div className="nav-item active">
-            <span>◉</span>
+            <span></span>
             Connections
           </div>
 
           <div className="nav-item">
-            <span>◈</span>
+            <span></span>
             Monitoring
           </div>
 
           <div className="nav-item">
-            <span>⌁</span>
+            <span></span>
             Audit Timeline
           </div>
 
           <div className="nav-item">
-            <span>◇</span>
+            <span></span>
             Provenance
           </div>
 
           <div className="nav-item">
-            <span>↶</span>
+            <span></span>
             Recovery
           </div>
 
@@ -615,7 +616,7 @@ function DatabaseConnections() {
             navigate(`/projects/${projectId}`)
           }
         >
-          ← Back to Project
+           Back to Project
         </button>
 
         {/* INTRO */}
@@ -1218,3 +1219,4 @@ function DatabaseConnections() {
 }
 
 export default DatabaseConnections;
+

@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config';
 import { useEffect, useRef, useState } from "react";
 import "./RecoveryPreview.css";
 
@@ -122,7 +123,7 @@ function RecoveryPreview({
 
     try {
       const response = await fetch(
-        `http://localhost:8080/recovery/audit/${auditId}/preview`,
+        `${API_BASE_URL}/recovery/audit/${auditId}/preview`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
       const payload = (await response.json()) as RecoveryPreviewData & RecoveryApiResponse;
@@ -177,7 +178,7 @@ function RecoveryPreview({
 
     try {
       const approvalResponse = await fetch(
-        `http://localhost:8080/recovery/audit/${auditId}/approve`,
+        `${API_BASE_URL}/recovery/audit/${auditId}/approve`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -197,7 +198,7 @@ function RecoveryPreview({
 
       setStage("executing");
       const executionResponse = await fetch(
-        `http://localhost:8080/recovery/${approval.recoveryId}/execute`,
+        `${API_BASE_URL}/recovery/${approval.recoveryId}/execute`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -246,7 +247,7 @@ function RecoveryPreview({
     setError("");
     try {
       const response = await fetch(
-        `http://localhost:8080/recovery/audit/${auditId}/restore-anyway`,
+        `${API_BASE_URL}/recovery/audit/${auditId}/restore-anyway`,
         {
           method: "POST",
           headers: {

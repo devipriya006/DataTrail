@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { clearSession, getSession } from "../auth";
@@ -66,7 +67,7 @@ function Monitoring() {
 
     try {
       const response = await fetch(
-        `http://localhost:8080/monitoring-configurations/connection/${connectionId}?projectId=${projectId}`,
+        `${API_BASE_URL}/monitoring-configurations/connection/${connectionId}?projectId=${projectId}`,
         { headers: { Authorization: `Bearer ${session.accessToken}` } }
       );
       if (!response.ok) {
@@ -95,7 +96,7 @@ function Monitoring() {
     setError("");
     try {
       const response = await fetch(
-        `http://localhost:8080/monitoring-configurations/${configuration.configId}`,
+        `${API_BASE_URL}/monitoring-configurations/${configuration.configId}`,
         {
           method: "PUT",
           headers: {
@@ -142,7 +143,7 @@ function Monitoring() {
     setError("");
     try {
       const response = await fetch(
-        `http://localhost:8080/monitoring-configurations/${configuration.configId}?projectId=${projectId}`,
+        `${API_BASE_URL}/monitoring-configurations/${configuration.configId}?projectId=${projectId}`,
         {
           method: "DELETE",
           headers: { Authorization: `Bearer ${session.accessToken}` },
@@ -174,18 +175,18 @@ function Monitoring() {
         </div>
         <nav className="dashboard-nav">
           <button className="nav-item" onClick={() => navigate("/dashboard")}>
-            <span>⌂</span>Dashboard
+            <span></span>Dashboard
           </button>
           <button className="nav-item active" onClick={() => navigate("/projects")}>
-            <span>▣</span>Projects
+            <span></span>Projects
           </button>
           <button
             className="nav-item"
             onClick={() => navigate(`/projects/${projectId}/connections`)}
           >
-            <span>◉</span>Connections
+            <span></span>Connections
           </button>
-          <div className="nav-item active"><span>◈</span>Monitoring</div>
+          <div className="nav-item active"><span></span>Monitoring</div>
         </nav>
       </aside>
 
@@ -205,7 +206,7 @@ function Monitoring() {
           className="panel-link"
           onClick={() => navigate(`/projects/${projectId}/connections`)}
         >
-          ← Back to Database Connections
+           Back to Database Connections
         </button>
 
         {error && <div className="dashboard-panel" role="alert">{error}</div>}
@@ -234,7 +235,7 @@ function Monitoring() {
               <div className="activity-details">
                 <strong>{configuration.schemaName}.{configuration.tableName}</strong>
                 <p>
-                  INSERT {configuration.monitorInsert ? "✓" : "—"} · UPDATE {configuration.monitorUpdate ? "✓" : "—"} · DELETE {configuration.monitorDelete ? "✓" : "—"}
+                  INSERT {configuration.monitorInsert ? "" : "—"} · UPDATE {configuration.monitorUpdate ? "" : "—"} · DELETE {configuration.monitorDelete ? "" : "—"}
                 </p>
                 <small>Sensitivity: {configuration.sensitivityLevel} · {configuration.monitoringEnabled ? "ACTIVE" : "DISABLED"}</small>
               </div>
@@ -271,3 +272,4 @@ function Monitoring() {
 }
 
 export default Monitoring;
+

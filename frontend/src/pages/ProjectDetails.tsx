@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { clearSession, getSession } from "../auth";
@@ -59,7 +60,7 @@ function ProjectDetails() {
 
       try {
         const response = await fetch(
-          `http://localhost:8080/projects/${projectId}`,
+          `${API_BASE_URL}/projects/${projectId}`,
           {
             headers: {
               Authorization: `Bearer ${session.accessToken}`,
@@ -103,7 +104,7 @@ function ProjectDetails() {
 
       try {
         const response = await fetch(
-          `http://localhost:8080/database-connections/project/${projectId}`,
+          `${API_BASE_URL}/database-connections/project/${projectId}`,
           {
             headers: {
               Authorization: `Bearer ${session.accessToken}`,
@@ -152,7 +153,7 @@ function ProjectDetails() {
               className="nav-item"
               onClick={() => navigate("/dashboard")}
             >
-              <span>⌂</span>
+              <span></span>
               Dashboard
             </div>
 
@@ -160,7 +161,7 @@ function ProjectDetails() {
               className="nav-item"
               onClick={() => navigate("/projects")}
             >
-              <span>▣</span>
+              <span></span>
               Projects
             </div>
 
@@ -168,7 +169,7 @@ function ProjectDetails() {
               className="nav-item active"
               onClick={() => navigate(`/projects/${projectId}`)}
             >
-              <span>⌂</span>
+              <span></span>
               Overview
             </div>
 
@@ -178,7 +179,7 @@ function ProjectDetails() {
                 navigate(`/projects/${projectId}/connections`)
               }
             >
-              <span>◉</span>
+              <span></span>
               Database
             </div>
 
@@ -188,7 +189,7 @@ function ProjectDetails() {
                 navigate(`/projects/${projectId}/audit-logs`)
               }
             >
-              <span>⌁</span>
+              <span></span>
               Audit Logs
             </div>
           </nav>
@@ -235,7 +236,7 @@ function ProjectDetails() {
             className="nav-item"
             onClick={() => navigate("/dashboard")}
           >
-            <span>⌂</span>
+            <span></span>
             Dashboard
           </div>
 
@@ -243,7 +244,7 @@ function ProjectDetails() {
             className="nav-item"
             onClick={() => navigate("/projects")}
           >
-            <span>▣</span>
+            <span></span>
             Projects
           </div>
 
@@ -251,7 +252,7 @@ function ProjectDetails() {
             className="nav-item active"
             onClick={() => navigate(`/projects/${projectId}`)}
           >
-            <span>⌂</span>
+            <span></span>
             Overview
           </div>
 
@@ -261,7 +262,7 @@ function ProjectDetails() {
               navigate(`/projects/${projectId}/connections`)
             }
           >
-            <span>◉</span>
+            <span></span>
             Database
           </div>
 
@@ -271,7 +272,7 @@ function ProjectDetails() {
               navigate(`/projects/${projectId}/audit-logs`)
             }
           >
-            <span>⌁</span>
+            <span></span>
             Audit Logs
           </div>
         </nav>
@@ -316,7 +317,7 @@ function ProjectDetails() {
               className="new-project-button"
               onClick={() => navigate("/projects")}
             >
-              ← Back to Projects
+               Back to Projects
             </button>
           </section>
         ) : project ? (
@@ -338,7 +339,7 @@ function ProjectDetails() {
                 className="new-project-button"
                 onClick={() => navigate("/projects")}
               >
-                ← Projects
+                 Projects
               </button>
             </section>
 

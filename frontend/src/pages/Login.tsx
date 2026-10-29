@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/global.css";
@@ -32,7 +33,7 @@ function Login() {
 
     try {
       const response = await fetch(
-        "http://localhost:8080/auth/login",
+        `${API_BASE_URL}/auth/login`,
         {
           method: "POST",
           headers: {
@@ -99,7 +100,7 @@ function Login() {
             <div className="feature-list">
 
               <div className="feature">
-                <div className="feature-icon">⌁</div>
+                <div className="feature-icon"></div>
 
                 <div>
                   <strong>Complete provenance</strong>
@@ -110,7 +111,7 @@ function Login() {
               </div>
 
               <div className="feature">
-                <div className="feature-icon">◈</div>
+                <div className="feature-icon"></div>
 
                 <div>
                   <strong>Dependency intelligence</strong>
@@ -121,7 +122,7 @@ function Login() {
               </div>
 
               <div className="feature">
-                <div className="feature-icon">↶</div>
+                <div className="feature-icon"></div>
 
                 <div>
                   <strong>Safe recovery</strong>
@@ -150,7 +151,7 @@ function Login() {
             <div className="card-header">
 
               <div className="secure-badge">
-                <span>◆</span>
+                <span></span>
                 SECURE ACCESS
               </div>
 
@@ -172,7 +173,7 @@ function Login() {
 
                 <div className="input-wrapper">
 
-                  <span className="input-icon">◎</span>
+                  <span className="input-icon"></span>
 
                   <input
                     id="username"
@@ -205,7 +206,7 @@ function Login() {
 
                 <div className="input-wrapper">
 
-                  <span className="input-icon">◆</span>
+                  <span className="input-icon"></span>
 
                   <input
                     id="password"
@@ -222,7 +223,7 @@ function Login() {
                     type="button"
                     className="show-password"
                   >
-                    ◉
+                    
                   </button>
 
                 </div>
@@ -275,7 +276,7 @@ function Login() {
 
             <div className="security-note">
 
-              <span>⌁</span>
+              <span></span>
 
               <p>
                 Your database credentials and provenance data
@@ -300,3 +301,4 @@ function Login() {
 }
 
 export default Login;
+

@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getSession } from "../auth";
@@ -33,7 +34,7 @@ function Projects() {
 
     try {
       const response = await fetch(
-        "http://localhost:8080/projects",
+        `${API_BASE_URL}/projects`,
         {
           headers: {
             Authorization: `Bearer ${session.accessToken}`,
@@ -78,7 +79,7 @@ function Projects() {
 
     try {
       const response = await fetch(
-        "http://localhost:8080/projects",
+        `${API_BASE_URL}/projects`,
         {
           method: "POST",
           headers: {
@@ -136,37 +137,37 @@ function Projects() {
             className="nav-item"
             onClick={() => navigate("/dashboard")}
           >
-            <span>⌂</span>
+            <span></span>
             Dashboard
           </div>
 
           <div className="nav-item active">
-            <span>▣</span>
+            <span></span>
             Projects
           </div>
 
           <div className="nav-item">
-            <span>◉</span>
+            <span></span>
             Connections
           </div>
 
           <div className="nav-item">
-            <span>◈</span>
+            <span></span>
             Monitoring
           </div>
 
           <div className="nav-item">
-            <span>⌁</span>
+            <span></span>
             Audit Timeline
           </div>
 
           <div className="nav-item">
-            <span>◇</span>
+            <span></span>
             Provenance
           </div>
 
           <div className="nav-item">
-            <span>↶</span>
+            <span></span>
             Recovery
           </div>
 
@@ -439,3 +440,4 @@ function Projects() {
 }
 
 export default Projects;
+

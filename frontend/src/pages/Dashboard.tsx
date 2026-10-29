@@ -1,10 +1,10 @@
+import { API_BASE_URL } from '../config';
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { clearSession, getSession } from "../auth";
 import "../styles/global.css";
 import "../styles/dashboard.css";
 
-const API_BASE_URL = "http://localhost:8080";
 
 type Project = {
   projectId: number;
@@ -188,7 +188,7 @@ function Dashboard() {
   };
 
   const displayCount = (count: number | null) => {
-    if (loadingCounts) return "…";
+    if (loadingCounts) return "";
     return count === null ? "—" : count;
   };
 
@@ -202,36 +202,36 @@ function Dashboard() {
         </div>
         <nav className="dashboard-nav">
           <div className="nav-item active">
-            <span>⌂</span>
+            <span></span>
             Dashboard
           </div>
           <div className="nav-item" onClick={() => navigate("/projects")}>
-            <span>▣</span>
+            <span></span>
             Projects
           </div>
           <div className="nav-item">
-            <span>◉</span>
+            <span></span>
             Connections
           </div>
           <div className="nav-item">
-            <span>◈</span>
+            <span></span>
             Monitoring
           </div>
           <div className="nav-item">
-            <span>⌁</span>
+            <span></span>
             Audit Timeline
           </div>
           <div className="nav-item">
-            <span>◇</span>
+            <span></span>
             Provenance
           </div>
           <div className="nav-item">
-            <span>↶</span>
+            <span></span>
             Recovery
           </div>
         </nav>
         <button className="logout-button" onClick={handleLogout}>
-          <span>↪</span>
+          <span></span>
           Sign out
         </button>
       </aside>
@@ -300,28 +300,6 @@ function Dashboard() {
 
         {/* LOWER CONTENT — preserved for this counts-only update */}
         <section className="dashboard-grid">
-          {/* RECENT ACTIVITY */}
-          <div className="dashboard-panel">
-            <div className="panel-header">
-              <div>
-                <p className="section-label">RECENT ACTIVITY</p>
-                <h3>Latest database changes</h3>
-              </div>
-              <button className="panel-link">View timeline →</button>
-            </div>
-            <div className="activity-item">
-              <div className="activity-marker">UPDATE</div>
-              <div className="activity-details">
-                <strong>users record modified</strong>
-                <p>
-                  Email value changed from old@example.com
-                  to new@example.com
-                </p>
-                <small>TXN-001 · changed by alice</small>
-              </div>
-              <span className="activity-time">Recent</span>
-            </div>
-          </div>
 
           {/* SYSTEM STATUS — preserved for this counts-only update */}
           <div className="dashboard-panel">
@@ -362,3 +340,5 @@ function Dashboard() {
 }
 
 export default Dashboard;
+
+

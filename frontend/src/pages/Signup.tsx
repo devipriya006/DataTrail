@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/global.css";
@@ -25,7 +26,7 @@ function Signup() {
       const username = email.split("@")[0];
 
       const response = await fetch(
-        "http://localhost:8080/auth/register",
+        `${API_BASE_URL}/auth/register`,
         {
           method: "POST",
           headers: {
@@ -99,7 +100,7 @@ function Signup() {
             <div className="feature-list">
 
               <div className="feature">
-                <div className="feature-icon">⌁</div>
+                <div className="feature-icon"></div>
 
                 <div>
                   <strong>Track every change</strong>
@@ -110,7 +111,7 @@ function Signup() {
               </div>
 
               <div className="feature">
-                <div className="feature-icon">◈</div>
+                <div className="feature-icon"></div>
 
                 <div>
                   <strong>Understand dependencies</strong>
@@ -121,7 +122,7 @@ function Signup() {
               </div>
 
               <div className="feature">
-                <div className="feature-icon">↶</div>
+                <div className="feature-icon"></div>
 
                 <div>
                   <strong>Recover safely</strong>
@@ -151,7 +152,7 @@ function Signup() {
             <div className="card-header">
 
               <div className="secure-badge">
-                <span>◆</span>
+                <span></span>
                 CREATE ACCOUNT
               </div>
 
@@ -173,7 +174,7 @@ function Signup() {
 
                 <div className="input-wrapper">
 
-                  <span className="input-icon">◎</span>
+                  <span className="input-icon"></span>
 
                   <input
                     id="name"
@@ -198,7 +199,7 @@ function Signup() {
 
                 <div className="input-wrapper">
 
-                  <span className="input-icon">◎</span>
+                  <span className="input-icon"></span>
 
                   <input
                     id="email"
@@ -223,7 +224,7 @@ function Signup() {
 
                 <div className="input-wrapper">
 
-                  <span className="input-icon">◆</span>
+                  <span className="input-icon"></span>
 
                   <input
                     id="password"
@@ -276,7 +277,7 @@ function Signup() {
 
             <div className="security-note">
 
-              <span>⌁</span>
+              <span></span>
 
               <p>
                 Your account will be protected by TraceDB's
@@ -301,3 +302,4 @@ function Signup() {
 }
 
 export default Signup;
+
