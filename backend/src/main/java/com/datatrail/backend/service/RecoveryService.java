@@ -16,6 +16,11 @@ import com.datatrail.backend.repository.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -29,10 +34,10 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
+
+
 import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
+
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -382,13 +387,18 @@ public class RecoveryService {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "The record no longer requires an administrator drift override.");
                 }
 
-                ChainHead previous = readChainHead(target, auditLog.getConfiguration().getConfigId());
+                
+                
                 String transactionId = currentTransactionId(target);
                 setActor(target, actor);
                 executeRestoreUpdate(target, evaluation);
-                long auditEventId = verifyTriggerAudit(target, auditLog, evaluation, previous, transactionId);
+
+                long outboxEventId = verifyTriggerOutbox(
+                        target, auditLog, evaluation, transactionId);
+
                 target.commit();
-                return auditEventId;
+                return outboxEventId;
+
             } catch (Exception exception) {
                 try {
                     target.rollback();
@@ -398,10 +408,18 @@ public class RecoveryService {
                 if (exception instanceof ResponseStatusException responseStatusException) {
                     throw responseStatusException;
                 }
-                if (exception instanceof SQLException sqlException) {
-                    log.warn("Target recovery transaction failed: auditId={}, sqlState={}", auditLog.getAuditId(), sqlException.getSQLState());
-                    throw targetUnavailable();
-                }
+                
+if (exception instanceof SQLException sqlException) {
+    log.error(
+            "Target recovery SQL failure: auditId={}, sqlState={}, message={}",
+            auditLog.getAuditId(),
+            sqlException.getSQLState(),
+            sqlException.getMessage(),
+            sqlException
+    );
+    throw targetUnavailable();
+}
+
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Target recovery failed; no change was committed.");
             }
         } catch (SQLException exception) {
@@ -466,8 +484,13 @@ public class RecoveryService {
             }
         }
 
-        verifyAuditTrigger(target, schemaName, tableName);
-        verifyActiveMonitoringConfiguration(target, configuration);
+        verifyAuditTrigger(
+        target,
+        schemaName,
+        tableName,
+        auditLog.getConfiguration()
+);
+        verifyActiveMonitoringConfiguration(configuration);
 
         String quote = metadata.getIdentifierQuoteString();
         if (quote == null || quote.isBlank()) {
@@ -564,66 +587,125 @@ public class RecoveryService {
         return keys.get(0);
     }
 
-    private void verifyAuditTrigger(Connection target, String schema, String table) throws SQLException {
-        // Recovery only proceeds when the known, verified DataTrail UPDATE trigger is present.
-        // Broader table support requires installing and verifying matching trigger functions first.
-        if (!"public".equals(schema) || !"users".equals(table)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Recovery is only supported for public.users while that table has a verified DataTrail audit trigger.");
-        }
-        String sql = "SELECT COUNT(*) FROM pg_trigger t "
-                + "JOIN pg_class c ON c.oid = t.tgrelid "
-                + "JOIN pg_namespace n ON n.oid = c.relnamespace "
-                + "JOIN pg_proc p ON p.oid = t.tgfoid "
-                + "WHERE NOT t.tgisinternal AND t.tgenabled <> 'D' "
-                + "AND (t.tgtype::integer & 1) = 1 AND (t.tgtype::integer & 16) = 16 "
-                + "AND n.nspname = ? AND c.relname = ? AND p.proname = 'datatrail_capture_users_changes'";
-        try (PreparedStatement statement = target.prepareStatement(sql)) {
-            statement.setString(1, schema);
-            statement.setString(2, table);
-            try (ResultSet result = statement.executeQuery()) {
-                if (!result.next() || result.getLong(1) != 1L) {
-                    throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                            "The verified public.users audit trigger is missing, disabled, or ambiguous.");
-                }
-            }
-        }
+  private void verifyAuditTrigger(
+        Connection target,
+        String schemaName,
+        String tableName,
+        MonitoringConfiguration configuration) {
+
+    if (configuration == null
+            || configuration.getConfigId() == null
+            || configuration.getConnection() == null
+            || configuration.getConnection().getConnectionId() == null) {
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "The monitoring configuration is incomplete.");
     }
 
-    private void verifyActiveMonitoringConfiguration(Connection target, MonitoringConfiguration configuration) throws SQLException {
-        String sql = "SELECT config_id FROM monitoring_configurations "
-                + "WHERE LOWER(schema_name) = LOWER(?) AND LOWER(table_name) = LOWER(?) "
-                + "AND monitoring_enabled = TRUE AND monitor_update = TRUE "
-                + "AND effective_from <= CURRENT_TIMESTAMP "
-                + "AND (effective_to IS NULL OR effective_to >= CURRENT_TIMESTAMP) "
-                + "ORDER BY config_id DESC LIMIT 1";
-        try (PreparedStatement statement = target.prepareStatement(sql)) {
-            statement.setString(1, configuration.getSchemaName());
-            statement.setString(2, configuration.getTableName());
-            try (ResultSet result = statement.executeQuery()) {
-                if (!result.next() || !Objects.equals(result.getLong(1), configuration.getConfigId())) {
-                    throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "The PostgreSQL trigger would not audit this monitoring configuration.");
-                }
+    String expectedTrigger = "dt_capture_"
+            + configuration.getConfigId();
+
+    String expectedFunctionSchema = "datatrail_capture_"
+            + configuration.getConnection().getConnectionId();
+
+    String sql = """
+            SELECT t.tgenabled,
+                   target_schema.nspname AS table_schema,
+                   target_table.relname AS table_name,
+                   t.tgname AS trigger_name,
+                   function_schema.nspname AS function_schema,
+                   p.proname AS function_name,
+                   p.prorettype::regtype::text AS return_type,
+                   p.prorettype = 'pg_catalog.trigger'::regtype AS returns_trigger
+            FROM pg_trigger t
+            JOIN pg_class target_table
+              ON target_table.oid = t.tgrelid
+            JOIN pg_namespace target_schema
+              ON target_schema.oid = target_table.relnamespace
+            JOIN pg_proc p
+              ON p.oid = t.tgfoid
+            JOIN pg_namespace function_schema
+              ON function_schema.oid = p.pronamespace
+            WHERE NOT t.tgisinternal
+              AND target_schema.nspname = ?
+              AND target_table.relname = ?
+              AND t.tgname = ?
+            """;
+
+    try (PreparedStatement statement =
+                 target.prepareStatement(sql)) {
+
+        statement.setString(1, schemaName);
+        statement.setString(2, tableName);
+        statement.setString(3, expectedTrigger);
+
+        try (ResultSet result = statement.executeQuery()) {
+            if (!result.next()) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Recovery requires the configured DataTrail capture trigger.");
+            }
+
+            boolean valid =
+                    "O".equals(result.getString("tgenabled"))
+                    && expectedTrigger.equals(
+                            result.getString("trigger_name"))
+                    && expectedFunctionSchema.equals(
+                            result.getString("function_schema"))
+                    && "capture_row_change".equals(
+                            result.getString("function_name"))
+                    && result.getBoolean("returns_trigger")
+                    && !result.next();
+
+            if (!valid) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "The DataTrail capture trigger is missing, disabled, or incorrectly configured.");
             }
         }
+
+    } catch (SQLException exception) {
+        throw new ResponseStatusException(
+                HttpStatus.BAD_GATEWAY,
+                "Could not verify the DataTrail capture trigger.",
+                exception);
     }
+}
+    
+private void verifyActiveMonitoringConfiguration(
+        MonitoringConfiguration configuration) {
+
+    if (configuration == null
+            || configuration.getConfigId() == null
+            || !Boolean.TRUE.equals(configuration.getMonitoringEnabled())
+            || !Boolean.TRUE.equals(configuration.getMonitorUpdate())) {
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "The saved monitoring configuration is not enabled for UPDATE recovery.");
+    }
+
+    LocalDateTime now = LocalDateTime.now();
+
+    if (configuration.getEffectiveFrom() != null
+            && now.isBefore(configuration.getEffectiveFrom())) {
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "The monitoring configuration is not effective yet.");
+    }
+
+    if (configuration.getEffectiveTo() != null
+            && now.isAfter(configuration.getEffectiveTo())) {
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "The monitoring configuration has expired.");
+    }
+}
+
 
     private void acquireAuditChainLock(Connection target, Long configId) throws SQLException {
         try (PreparedStatement statement = target.prepareStatement("SELECT pg_advisory_xact_lock(?)")) {
             statement.setLong(1, configId);
             statement.execute();
-        }
-    }
-
-    private ChainHead readChainHead(Connection target, Long configId) throws SQLException {
-        String sql = "SELECT chain_sequence, log_hash FROM audit_logs WHERE config_id = ? ORDER BY chain_sequence DESC LIMIT 1";
-        try (PreparedStatement statement = target.prepareStatement(sql)) {
-            statement.setLong(1, configId);
-            try (ResultSet result = statement.executeQuery()) {
-                return result.next()
-                        ? new ChainHead(result.getLong("chain_sequence"), result.getString("log_hash"))
-                        : new ChainHead(0L, null);
-            }
         }
     }
 
@@ -670,64 +752,96 @@ public class RecoveryService {
         }
     }
 
-    private long verifyTriggerAudit(
-            Connection target,
-            AuditLog original,
-            Evaluation evaluation,
-            ChainHead previous,
-            String transactionId) throws SQLException {
-        String sql = "SELECT audit_id, prev_hash, chain_sequence, log_hash, before_state, after_state, "
-                + "encode(digest(COALESCE(prev_hash, '') || '|' || chain_sequence::TEXT || '|' || operation || '|' "
-                + "|| COALESCE(transaction_id, '') || '|' || COALESCE(before_state, '') || '|' || COALESCE(after_state, '') || '|' "
-                + "|| COALESCE(changed_by, '') || '|' || COALESCE(database_user, '') || '|' || COALESCE(actor_source, '') || '|' "
-                + "|| event_timestamp::TEXT, 'sha256'), 'hex') AS verified_hash "
-                + "FROM audit_logs WHERE config_id = ? AND transaction_id = ? AND operation = 'UPDATE'";
+   
+private long verifyTriggerOutbox(
+        Connection target,
+        AuditLog original,
+        Evaluation evaluation,
+        String transactionId) throws SQLException {
 
-        long eventId;
-        String prevHash;
-        long sequence;
-        String hash;
-        String verifiedHash;
-        Map<String, Object> eventBefore;
-        Map<String, Object> eventAfter;
-        try (PreparedStatement statement = target.prepareStatement(sql)) {
-            statement.setLong(1, original.getConfiguration().getConfigId());
-            statement.setString(2, transactionId);
-            try (ResultSet result = statement.executeQuery()) {
-                if (!result.next()) {
-                    throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "The PostgreSQL trigger did not create an audit event; recovery was rolled back.");
-                }
-                eventId = result.getLong("audit_id");
-                prevHash = result.getString("prev_hash");
-                sequence = result.getLong("chain_sequence");
-                hash = result.getString("log_hash");
-                verifiedHash = result.getString("verified_hash");
-                eventBefore = parseJsonMap(result.getString("before_state"));
-                eventAfter = parseJsonMap(result.getString("after_state"));
-                if (result.next()) {
-                    throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "More than one audit event was created for the recovery update; recovery was rolled back.");
-                }
-            }
-        }
-
-        if (sequence != previous.sequence + 1
-                || !Objects.equals(prevHash, previous.hash)
-                || hash == null
-                || !hash.matches("[0-9a-f]{64}")
-                || !Objects.equals(hash, verifiedHash)
-                || eventBefore == null
-                || eventAfter == null) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "The PostgreSQL audit hash chain could not be verified; recovery was rolled back.");
-        }
-        for (String field : evaluation.changedFields) {
-            if (!eventBefore.containsKey(field) || !eventAfter.containsKey(field)
-                    || !valuesEqual(eventBefore.get(field), evaluation.currentState.get(field))
-                    || !valuesEqual(eventAfter.get(field), evaluation.beforeState.get(field))) {
-                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "The trigger audit event does not match the restored row; recovery was rolled back.");
-            }
-        }
-        return eventId;
+    String quote = target.getMetaData().getIdentifierQuoteString();
+    if (quote == null || quote.isBlank()) {
+        throw new SQLException("PostgreSQL identifier quoting is unavailable.");
     }
+
+    Long connectionId = original.getConfiguration()
+            .getConnection().getConnectionId();
+
+    String outboxTable = PostgresChangeCaptureInstaller
+            .qualifiedOutboxTable(quote, connectionId);
+
+    String sql = """
+            SELECT event_id, config_id, operation, transaction_id,
+                   before_state, after_state, changed_by, database_user,
+                   actor_source, event_timestamp
+            FROM %s
+            WHERE config_id = ?
+              AND transaction_id = ?
+              AND operation = 'UPDATE'
+            ORDER BY event_id DESC
+            LIMIT 2
+            """.formatted(outboxTable);
+
+    long eventId;
+    Map<String, Object> eventBefore;
+    Map<String, Object> eventAfter;
+
+    try (PreparedStatement statement = target.prepareStatement(sql)) {
+        statement.setLong(1, original.getConfiguration().getConfigId());
+        statement.setString(2, transactionId);
+
+        try (ResultSet result = statement.executeQuery()) {
+            if (!result.next()) {
+                throw new ResponseStatusException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "The PostgreSQL capture trigger did not create a recovery event; recovery was rolled back.");
+            }
+
+            eventId = result.getLong("event_id");
+
+            if (result.getLong("config_id")
+                    != original.getConfiguration().getConfigId()
+                    || !"UPDATE".equals(result.getString("operation"))
+                    || !transactionId.equals(result.getString("transaction_id"))) {
+                throw new ResponseStatusException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "The captured recovery event does not match the recovery transaction.");
+            }
+
+            eventBefore = parseJsonMap(result.getString("before_state"));
+            eventAfter = parseJsonMap(result.getString("after_state"));
+
+            if (result.next()) {
+                throw new ResponseStatusException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "Multiple captured UPDATE events matched this recovery transaction; recovery was rolled back.");
+            }
+        }
+    }
+
+    if (eventBefore == null || eventAfter == null) {
+        throw new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "The captured recovery event has invalid before/after state.");
+    }
+
+    for (String field : evaluation.changedFields) {
+        if (!eventBefore.containsKey(field)
+                || !eventAfter.containsKey(field)
+                || !valuesEqual(
+                        eventBefore.get(field),
+                        evaluation.currentState.get(field))
+                || !valuesEqual(
+                        eventAfter.get(field),
+                        evaluation.beforeState.get(field))) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "The captured event does not match the restored row; recovery was rolled back.");
+        }
+    }
+
+    return eventId;
+}
 
     private Connection openTarget(AuditLog auditLog) throws SQLException {
         DatabaseConnection connection = auditLog.getConfiguration().getConnection();
@@ -926,8 +1040,7 @@ public class RecoveryService {
             boolean drift) {
     }
 
-    private record ChainHead(long sequence, String hash) {
-    }
+    
 
     private record AdminAttempt(RecoveryAction action, RecoveryExecution execution) {
     }

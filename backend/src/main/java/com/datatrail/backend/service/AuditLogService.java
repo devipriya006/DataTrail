@@ -18,6 +18,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -33,7 +36,8 @@ import java.util.Set;
 
 @Service
 public class AuditLogService {
-
+        private static final Logger log =
+        LoggerFactory.getLogger(AuditLogService.class);
     private static final Set<String> SENSITIVE_FIELD_NAMES = Set.of(
             "password",
             "password_hash",
@@ -153,40 +157,85 @@ public class AuditLogService {
         String previousHash = null;
         long sequence = 1L;
         for (AuditLog previous : chain) {
-            if (previous.getChainSequence() == null
-                    || previous.getChainSequence() < 1
-                    || !Objects.equals(previous.getPrevHash(), previousHash)
-                    || !Objects.equals(previous.getLogHash(), computeHash(previous, previousHash))) {
-                throw new ResponseStatusException(
-                        HttpStatus.SERVICE_UNAVAILABLE,
-                        "The existing audit hash chain is invalid; the event was not ingested.");
-            }
-            if (previous.getChainSequence() == Long.MAX_VALUE) {
-                throw new ResponseStatusException(
-                        HttpStatus.SERVICE_UNAVAILABLE,
-                        "The audit chain has reached its maximum sequence.");
-            }
-            sequence = previous.getChainSequence() + 1;
-            previousHash = previous.getLogHash();
-        }
+    if (previous.getChainSequence() == null
+            || previous.getChainSequence() < 1) {
+        throw new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Invalid chain sequence for auditId="
+                        + previous.getAuditId()
+        );
+    }
 
-        AuditLog auditLog = new AuditLog(
-                configuration,
-                operation,
-                event.transactionId(),
-                event.beforeState(),
-                event.afterState(),
-                event.changedBy(),
-                event.databaseUser(),
-                event.actorSource(),
-                event.eventTimestamp(),
-                null,
-                previousHash,
-                sequence);
-        auditLog.setSourceEventId(event.sourceEventId());
-        auditLog.setLogHash(computeHash(auditLog, previousHash));
+    if (!Objects.equals(previous.getPrevHash(), previousHash)) {
+        throw new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Previous hash mismatch for auditId="
+                        + previous.getAuditId()
+                        + ", sequence="
+                        + previous.getChainSequence()
+        );
+    }
 
-        return auditLogRepository.saveAndFlush(auditLog);
+    String expectedHash = computeHash(previous, previousHash);
+
+if (!Objects.equals(previous.getLogHash(), expectedHash)) {
+    log.error(
+            "Audit hash mismatch: auditId={}, sequence={}, storedHash={}, calculatedHash={}, prevHash={}, operation={}, transactionId={}, eventTimestamp={}, changedBy={}, databaseUser={}, actorSource={}",
+            previous.getAuditId(),
+            previous.getChainSequence(),
+            previous.getLogHash(),
+            expectedHash,
+            previousHash,
+            previous.getOperation(),
+            previous.getTransactionId(),
+            previous.getEventTimestamp(),
+            previous.getChangedBy(),
+            previous.getDatabaseUser(),
+            previous.getActorSource()
+    );
+
+    throw new ResponseStatusException(
+            HttpStatus.SERVICE_UNAVAILABLE,
+            "Log hash mismatch for auditId="
+                    + previous.getAuditId()
+                    + ", sequence="
+                    + previous.getChainSequence()
+    );
+}
+    if (previous.getChainSequence() != sequence) {
+        throw new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Non-consecutive chain sequence for auditId="
+                        + previous.getAuditId()
+                        + ", expected=" + sequence
+                        + ", actual=" + previous.getChainSequence()
+        );
+    }
+
+    sequence++;
+    previousHash = previous.getLogHash();
+}
+
+// Create the NEW audit record only after validating every existing record.
+AuditLog auditLog = new AuditLog(
+        configuration,
+        operation,
+        event.transactionId(),
+        event.beforeState(),
+        event.afterState(),
+        event.changedBy(),
+        event.databaseUser(),
+        event.actorSource(),
+        event.eventTimestamp(),
+        null,
+        previousHash,
+        sequence
+);
+
+auditLog.setSourceEventId(event.sourceEventId());
+auditLog.setLogHash(computeHash(auditLog, previousHash));
+
+return auditLogRepository.saveAndFlush(auditLog);
     }
 
     private void validateIngestionEvent(AuditEventIngestion event) {
@@ -403,103 +452,84 @@ public class AuditLogService {
         );
     }
 
-    public Map<String, Object> verifyHashChain(
-            Long configId,
-            Long projectId,
-            String ownerUsername) {
+   
+public Map<String, Object> verifyHashChain(
+        Long configId,
+        Long projectId,
+        String ownerUsername) {
 
-        MonitoringConfiguration configuration =
-                requireOwnedConfiguration(
-                        configId,
-                        projectId,
-                        ownerUsername
-                );
+    MonitoringConfiguration configuration =
+            requireOwnedConfiguration(configId, projectId, ownerUsername);
 
-        List<AuditLog> logs =
-                auditLogRepository
-                        .findByConfigurationConfigId(configId)
-                        .stream()
-                        .sorted(
-                                Comparator.comparing(
-                                        AuditLog::getChainSequence,
-                                        Comparator.nullsLast(
-                                                Long::compareTo
-                                        )
-                                )
-                        )
-                        .toList();
+    List<AuditLog> logs = auditLogRepository
+            .findByConfigurationConfigId(configId)
+            .stream()
+            .sorted(Comparator.comparing(
+                    AuditLog::getChainSequence,
+                    Comparator.nullsLast(Long::compareTo)))
+            .toList();
 
-        String previousHash = null;
+    String previousHash = null;
+    boolean valid = true;
+    long expectedSequence = 1L;
+    int checkedEvents = 0;
 
-        boolean valid = true;
+    List<String> warnings = new ArrayList<>();
 
-        int checkedEvents = 0;
+    for (AuditLog log : logs) {
+        Long actualSequence = log.getChainSequence();
 
-        List<String> warnings = new ArrayList<>();
-
-        for (AuditLog log : logs) {
-
-            checkedEvents++;
-
-            /*
-             * The Java calculation MUST match the PostgreSQL trigger
-             * exactly.
-             */
-            String expectedHash =
-                    computeHash(
-                            log,
-                            previousHash
-                    );
-
-            if (!Objects.equals(
-                    log.getLogHash(),
-                    expectedHash
-            )) {
-                valid = false;
-
-                warnings.add(
-                        "Hash mismatch at auditId="
-                                + log.getAuditId()
-                );
-            }
-
-            if (!Objects.equals(
-                    log.getPrevHash(),
-                    previousHash
-            )) {
-                valid = false;
-
-                warnings.add(
-                        "Previous hash mismatch at auditId="
-                                + log.getAuditId()
-                );
-            }
-
-            previousHash = log.getLogHash();
+        if (actualSequence == null
+                || actualSequence < 1
+                || actualSequence != expectedSequence) {
+            valid = false;
+            warnings.add(
+                    "Invalid sequence at auditId=" + log.getAuditId()
+                            + "; expected=" + expectedSequence
+                            + ", actual=" + actualSequence);
+            break;
         }
 
-        return Map.of(
-                "configId",
-                configId,
+        if (!Objects.equals(log.getPrevHash(), previousHash)) {
+            valid = false;
+            warnings.add(
+                    "Previous hash mismatch at auditId=" + log.getAuditId());
+            break;
+        }
 
-                "projectId",
-                projectId,
+        String expectedHash = computeHash(log, previousHash);
 
-                "table",
-                configuration.getSchemaName()
-                        + "."
-                        + configuration.getTableName(),
+        if (!Objects.equals(log.getLogHash(), expectedHash)) {
+            valid = false;
+            warnings.add(
+                    "Log hash mismatch at auditId=" + log.getAuditId());
+            break;
+        }
 
-                "valid",
-                valid,
+        checkedEvents++;
+        previousHash = log.getLogHash();
 
-                "checkedEvents",
-                checkedEvents,
+        if (expectedSequence == Long.MAX_VALUE) {
+            if (checkedEvents < logs.size()) {
+                valid = false;
+                warnings.add("Audit chain sequence limit reached.");
+            }
+            break;
+        }
 
-                "warnings",
-                warnings
-        );
+        expectedSequence++;
     }
+
+    return Map.of(
+            "configId", configId,
+            "projectId", projectId,
+            "table", configuration.getSchemaName()
+                    + "." + configuration.getTableName(),
+            "valid", valid,
+            "checkedEvents", checkedEvents,
+            "warnings", warnings
+    );
+}
 
     public void deleteAuditLog(
             Long id,
@@ -918,12 +948,25 @@ public class AuditLogService {
                                 ""
                         ),
 
-                        Objects.toString(
-                                log.getEventTimestamp(),
-                                ""
-                        )
+                        log.getEventTimestamp() == null
+        ? ""
+        : log.getEventTimestamp().toString().replace('T', ' ')
                 );
 
+       this.log.warn(
+    "Hash input metadata: sequence={}, operation={}, transactionId={}, " +
+    "beforeStateLength={}, afterStateLength={}, changedBy={}, " +
+    "databaseUser={}, actorSource={}, timestamp={}",
+    log.getChainSequence(),
+    log.getOperation(),
+    log.getTransactionId(),
+    log.getBeforeState() == null ? null : log.getBeforeState().length(),
+    log.getAfterState() == null ? null : log.getAfterState().length(),
+    log.getChangedBy(),
+    log.getDatabaseUser(),
+    log.getActorSource(),
+    log.getEventTimestamp()
+);
         try {
 
             MessageDigest digest =
