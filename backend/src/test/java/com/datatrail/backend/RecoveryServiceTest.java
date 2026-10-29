@@ -526,7 +526,7 @@ class RecoveryServiceTest {
 
         PreparedStatement trigger = mock(PreparedStatement.class);
         ResultSet triggerResult = singleRow();
-        when(triggerResult.getLong(1)).thenReturn(1L);
+        stubValidCaptureTrigger(triggerResult);
         when(trigger.executeQuery()).thenReturn(triggerResult);
 
         PreparedStatement config = mock(PreparedStatement.class);
@@ -581,7 +581,7 @@ class RecoveryServiceTest {
 
         PreparedStatement trigger = mock(PreparedStatement.class);
         ResultSet triggerResult = singleRow();
-        when(triggerResult.getLong(1)).thenReturn(1L);
+        stubValidCaptureTrigger(triggerResult);
         when(trigger.executeQuery()).thenReturn(triggerResult);
 
         PreparedStatement config = mock(PreparedStatement.class);
@@ -617,21 +617,20 @@ class RecoveryServiceTest {
         PreparedStatement update = mock(PreparedStatement.class);
         when(update.executeUpdate()).thenReturn(1);
 
-        PreparedStatement audit = mock(PreparedStatement.class);
-        ResultSet auditResult = mock(ResultSet.class);
+        PreparedStatement outbox = mock(PreparedStatement.class);
+        ResultSet outboxResult = mock(ResultSet.class);
         if (auditEvent != null && auditEvent.exists) {
-            when(auditResult.next()).thenReturn(true, false);
-            when(auditResult.getLong("audit_id")).thenReturn(auditEvent.auditId);
-            when(auditResult.getLong("chain_sequence")).thenReturn(auditEvent.sequence);
-            when(auditResult.getString("prev_hash")).thenReturn(auditEvent.previousHash);
-            when(auditResult.getString("log_hash")).thenReturn(auditEvent.hash);
-            when(auditResult.getString("verified_hash")).thenReturn(auditEvent.verifiedHash);
-            when(auditResult.getString("before_state")).thenReturn(auditEvent.beforeState);
-            when(auditResult.getString("after_state")).thenReturn(auditEvent.afterState);
+            when(outboxResult.next()).thenReturn(true, false);
+            when(outboxResult.getLong("event_id")).thenReturn(auditEvent.auditId);
+            when(outboxResult.getLong("config_id")).thenReturn(5L);
+            when(outboxResult.getString("operation")).thenReturn("UPDATE");
+            when(outboxResult.getString("transaction_id")).thenReturn("42");
+            when(outboxResult.getString("before_state")).thenReturn(auditEvent.beforeState);
+            when(outboxResult.getString("after_state")).thenReturn(auditEvent.afterState);
         } else {
-            when(auditResult.next()).thenReturn(false);
+            when(outboxResult.next()).thenReturn(false);
         }
-        when(audit.executeQuery()).thenReturn(auditResult);
+        when(outbox.executeQuery()).thenReturn(outboxResult);
 
         when(target.prepareStatement(anyString())).thenAnswer(invocation -> {
             String sql = invocation.getArgument(0);
@@ -643,7 +642,7 @@ class RecoveryServiceTest {
             if (sql.startsWith("SELECT txid_current")) return txid;
             if (sql.startsWith("SELECT set_config")) return actor;
             if (sql.startsWith("UPDATE")) return update;
-            if (sql.contains("encode(digest")) return audit;
+            if (sql.contains("outbox_events")) return outbox;
             throw new AssertionError("Unexpected recovery SQL category: "
                     + sql.substring(0, Math.min(30, sql.length())));
         });
@@ -664,6 +663,14 @@ class RecoveryServiceTest {
         ResultSet result = mock(ResultSet.class);
         when(result.next()).thenReturn(true, false);
         return result;
+    }
+
+    private void stubValidCaptureTrigger(ResultSet triggerResult) throws Exception {
+        when(triggerResult.getString("tgenabled")).thenReturn("O");
+        when(triggerResult.getString("trigger_name")).thenReturn("dt_capture_5");
+        when(triggerResult.getString("function_schema")).thenReturn("datatrail_capture_7");
+        when(triggerResult.getString("function_name")).thenReturn("capture_row_change");
+        when(triggerResult.getBoolean("returns_trigger")).thenReturn(true);
     }
 
     private Timestamp timestamp(String value) {
