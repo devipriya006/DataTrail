@@ -1,3 +1,4 @@
+
 import {
   BrowserRouter,
   Routes,
@@ -10,10 +11,12 @@ import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
 import Projects from "./pages/Projects";
 import ProjectDetails from "./pages/ProjectDetails";
-import { isAuthenticated } from "./auth";
 import DatabaseConnections from "./pages/DatabaseConnections";
 import Monitoring from "./pages/Monitoring";
 import AuditLogs from "./pages/AuditLogs";
+import AdminPage from "./pages/AdminPage";
+
+import { isAuthenticated, getSession } from "./auth";
 
 function ProtectedRoute({
   children,
@@ -27,10 +30,25 @@ function ProtectedRoute({
   return <>{children}</>;
 }
 
+function AdminRoute({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (getSession()?.role?.toUpperCase() !== "ADMIN") {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function App() {
   return (
     <BrowserRouter>
-
       <Routes>
 
         <Route
@@ -65,22 +83,23 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
-        path="/projects/:projectId"
-        element={
-          <ProtectedRoute>
-            <ProjectDetails />
-          </ProtectedRoute>
-        }
+          path="/projects/:projectId"
+          element={
+            <ProtectedRoute>
+              <ProjectDetails />
+            </ProtectedRoute>
+          }
         />
 
         <Route
-        path="/projects/:projectId/connections"
-        element={
-          <ProtectedRoute>
-            <DatabaseConnections />
-          </ProtectedRoute>
-        }
+          path="/projects/:projectId/connections"
+          element={
+            <ProtectedRoute>
+              <DatabaseConnections />
+            </ProtectedRoute>
+          }
         />
 
         <Route
@@ -110,13 +129,22 @@ function App() {
           }
         />
 
+        {/* ADMIN-only page */}
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminPage />
+            </AdminRoute>
+          }
+        />
+
         <Route
           path="*"
           element={<Navigate to="/login" replace />}
         />
 
       </Routes>
-
     </BrowserRouter>
   );
 }

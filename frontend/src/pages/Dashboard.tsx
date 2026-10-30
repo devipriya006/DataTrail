@@ -56,7 +56,7 @@ function Dashboard() {
   const accessToken = session?.accessToken;
   const username = session?.username ?? "User";
   const role = session?.role ?? "USER";
-
+  const isAdmin = role.toUpperCase() === "ADMIN";
   const [projectCount, setProjectCount] = useState<number | null>(null);
   const [connectionCount, setConnectionCount] = useState<number | null>(null);
   const [monitoredTableCount, setMonitoredTableCount] = useState<number | null>(null);
@@ -209,6 +209,16 @@ function Dashboard() {
             <span></span>
             Projects
           </div>
+          {isAdmin && (
+          <div
+            className="nav-item"
+            onClick={() => navigate("/admin")}
+          >
+            <span></span>
+            Admin
+          </div>
+        )}
+
           <div className="nav-item">
             <span></span>
             Connections
