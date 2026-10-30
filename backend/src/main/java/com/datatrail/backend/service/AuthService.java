@@ -56,8 +56,10 @@ public class AuthService {
             throw new RuntimeException("Email already exists");
         }
 
-        Role role = roleRepository.findById(request.getRoleId())
-                .orElseThrow(() -> new RuntimeException("Role not found"));
+        Role role = roleRepository.findByRoleName("USER")
+        .orElseThrow(() -> new IllegalStateException(
+                "USER role not found. Add USER to the roles table."
+        ));
 
         String hashedPassword =
                 passwordEncoder.encode(request.getPassword());

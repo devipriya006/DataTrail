@@ -5,7 +5,6 @@ public class RegisterRequest {
     private String username;
     private String email;
     private String password;
-    private Long roleId;
 
     public RegisterRequest() {
     }
@@ -32,13 +31,5 @@ public class RegisterRequest {
 
     public void setPassword(String password) {
         this.password = password;
-    }
-
-    public Long getRoleId() {
-        return roleId;
-    }
-
-    public void setRoleId(Long roleId) {
-        this.roleId = roleId;
     }
 }

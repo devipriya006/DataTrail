@@ -2,6 +2,7 @@ package com.datatrail.backend.controller;
 
 import com.datatrail.backend.entity.User;
 import com.datatrail.backend.service.UserService;
+
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -40,5 +41,16 @@ public class UserController {
     @GetMapping("/{id}")
     public User getUserById(@PathVariable Long id) {
         return userService.getUserById(id);
+    }
+
+    @PatchMapping("/{id}/role")
+    public User updateUserRole(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> request) {
+
+        return userService.updateUserRole(
+                id,
+                request.get("roleName")
+        );
     }
 }
